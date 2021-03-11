@@ -46,7 +46,7 @@ function clean_up() {
 trap clean_up INT EXIT TERM
 
 echo "Clone DQN Zoo repository"
-git clone https://github.com/deepmind/dqn_zoo.git "$WORK_DIR"
+git clone https://github.com/seblee97/dqn_zoo.git "$WORK_DIR"
 find "$WORK_DIR"
 
 echo "Remove container if it exists"
