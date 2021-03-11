@@ -3,17 +3,13 @@ FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
 
 RUN apt-get update
 
-# additional update commands 
-RUN apt-get -f -y dist-upgrade
-RUN apt-get -f -y install
-
 # Install dependencies for snappy.
 RUN apt-get install -y libsnappy-dev=1.1.7-1
 
 # Install git to clone RLax repository.
 # before additional update commands, this led to error not finding git version
 # solution via https://askubuntu.com/questions/886765/cannot-install-git-on-ubuntu-16-04-lts
-RUN apt-get install -y git=1:2.17.1-1ubuntu0.7
+RUN apt-get update && apt-get -f -y dist-upgrade && apt-get -f -y install && apt-get install -y git=1:2.17.1-1ubuntu0.7
 
 # Install Python 3, pip, setuptools.
 RUN apt-get install -y python3=3.6.7-1~18.04 python3-pip python3-setuptools
