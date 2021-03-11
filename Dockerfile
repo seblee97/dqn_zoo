@@ -4,8 +4,8 @@ FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu18.04
 RUN apt-get update
 
 # additional update commands 
-RUN apt-get -f dist-upgrade -y
-RUN apt-get -f install
+RUN apt-get -f -y dist-upgrade
+RUN apt-get -f -y install
 
 # Install dependencies for snappy.
 RUN apt-get install -y libsnappy-dev=1.1.7-1
