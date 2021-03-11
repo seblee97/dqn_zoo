@@ -44,6 +44,7 @@ RUN python3 -m dqn_zoo.qrdqn.run_atari_test
 RUN python3 -m dqn_zoo.rainbow.run_atari_test
 
 # Allow running container as an executable. E.g. to run DQN:
-docker run --gpus all --name dqn_zoo_dqn dqn_zoo:latest -m dqn_zoo.dqn.run_atari --environment_name=pong
+# docker run --gpus all --name dqn_zoo_dqn dqn_zoo:latest \
+#     -m dqn_zoo.dqn.run_atari --environment_name=pong
 ENTRYPOINT ["python3"]
 
