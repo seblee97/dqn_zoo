@@ -83,10 +83,14 @@ class Dqn:
                             transitions.s_tm1).q_values
       q_target_t = network.apply(target_params, target_key,
                                  transitions.s_t).q_values
+
+      # compute shaping function F(s, a, s')
+      shaped_rewards = shaping_function(target_params, transitions, rng_key)
+
       td_errors = _batch_q_learning(
           q_tm1,
           transitions.a_tm1,
-          transitions.r_t,
+          shaped_rewards,
           transitions.discount_t,
           q_target_t,
       )
