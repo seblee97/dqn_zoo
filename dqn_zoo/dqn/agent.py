@@ -44,6 +44,7 @@ class Dqn:
       optimizer: optax.GradientTransformation,
       transition_accumulator: Any,
       replay: replay_lib.TransitionReplay,
+      shaping_function,
       batch_size: int,
       exploration_epsilon: Callable[[int], float],
       min_replay_capacity_fraction: float,
