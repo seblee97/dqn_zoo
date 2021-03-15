@@ -1,0 +1,11 @@
+absl-py
+dm-env
+jax
+jaxlib
+git+https://github.com/deepmind/dm-haiku
+optax
+atari-py
+rlax
+gym
+Pillow
+python-snappy
