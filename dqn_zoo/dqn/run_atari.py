@@ -40,8 +40,10 @@ from dqn_zoo import gym_atari
 from dqn_zoo import networks
 from dqn_zoo import parts
 from dqn_zoo import processors
+from dqn_zoo import shaping 
 from dqn_zoo import replay as replay_lib
 from dqn_zoo.dqn import agent
+from dqn_zoo import constants
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
@@ -52,6 +54,8 @@ flags.DEFINE_bool('use_gym', False, '')
 flags.DEFINE_integer('replay_capacity', int(1e6), '')
 flags.DEFINE_bool('compress_state', True, '')
 flags.DEFINE_float('min_replay_capacity_fraction', 0.05, '')
+flags.DEFINE_string('shaping_function_type', 'no_penalty', '')
+flags.DEFINE_float('shaping_multiplicative_factor', -0.05, '')
 flags.DEFINE_integer('batch_size', 32, '')
 flags.DEFINE_integer('max_frames_per_episode', 108000, '')  # 30 mins.
 flags.DEFINE_integer('num_action_repeats', 4, '')
@@ -169,6 +173,11 @@ def main(argv):
       centered=True,
   )
 
+  if FLAGS.shaping_function_type == constants.NO_PENALTY:
+    shaping_function = shaping.NoPenalty()
+  if FLAGS.shaping_function_type == constants.HARD_CODED_PENALTY:
+    shaping_function = shaping.HardCodedPenalty(penalty=FLAGS.shaping_multiplicative_factor)
+
   train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
   train_agent = agent.Dqn(
@@ -178,6 +187,7 @@ def main(argv):
       optimizer=optimizer,
       transition_accumulator=replay_lib.TransitionAccumulator(),
       replay=replay,
+      shaping_function=shaping_function,
       batch_size=FLAGS.batch_size,
       exploration_epsilon=exploration_epsilon_schedule,
       min_replay_capacity_fraction=FLAGS.min_replay_capacity_fraction,
@@ -249,7 +259,7 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  config.update('jax_platform_name', 'gpu')  # Default to GPU.
+  config.update('jax_platform_name', 'cpu')  # Default to GPU.
   config.update('jax_numpy_rank_promotion', 'raise')
   config.config_with_absl()
   app.run(main)
