@@ -6,6 +6,7 @@ from absl import logging
 import dm_env
 import jax
 import jax.numpy as jnp
+import numpy as onp
 import optax
 import rlax
 
@@ -73,11 +74,11 @@ class BootstrappedDqn:
       q_target_t = network.apply(target_params, target_key,
                                  transitions.s_t).multi_head_output
 
+      # batch by num_heads -> batch by num_heads by num_actions
+      mask = jnp.einsum('ij,k->ijk', transitions.mask_t, jnp.ones(q_tm1.shape[-1]))
 
-      import pdb; pdb.set_trace()
-
-      masked_q = None
-      masked_q_target = None
+      masked_q = jnp.multiply(mask, q_tm1)
+      masked_q_target = jnp.multiply(mask, q_target_t)
 
       flattened_q = jnp.reshape(q_tm1, (q_tm1.shape[0], -1))
       flattened_q_target = jnp.reshape(q_target_t, (q_target_t.shape[0], -1))
@@ -92,8 +93,6 @@ class BootstrappedDqn:
           transitions.discount_t,
           flattened_q_target,
       )
-
-      import pdb; pdb.set_trace()
 
       td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
                                      grad_error_bound)
@@ -124,9 +123,9 @@ class BootstrappedDqn:
     self._select_action = jax.jit(select_action)
 
   def _get_random_mask(self, rng_key):
-      return jax.random.choice(
-        key=rng_key, a=2, shape=(self._num_heads,),
-        p=self._mask_probabilities)
+    return jax.random.choice(
+      key=rng_key, a=2, shape=(self._num_heads,),
+      p=self._mask_probabilities)
 
   def step(self, timestep: dm_env.TimeStep) -> parts.Action:
     """Selects action given timestep and potentially learns."""
