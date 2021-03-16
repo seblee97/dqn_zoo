@@ -40,6 +40,15 @@ class Transition(typing.NamedTuple):
   s_t: Optional[np.ndarray]
 
 
+class MaskedTransition(typing.NamedTuple):
+  s_tm1: Optional[np.ndarray]
+  a_tm1: Optional[parts.Action]
+  r_t: Optional[float]
+  discount_t: Optional[float]
+  s_t: Optional[np.ndarray]
+  mask_t: Optional[np.ndarray]
+
+
 class TransitionReplay(Generic[ReplayStructure]):
   """Uniform replay, with circular buffer storage for flat named tuples."""
 
