@@ -86,7 +86,7 @@ class Dqn:
                                  transitions.s_t).q_values
 
       # compute shaping function F(s, a, s')
-      shaped_rewards = shaping_function(target_params, transitions, rng_key)
+      shaped_rewards = shaping_function(q_target_t, transitions, rng_key)
 
       td_errors = _batch_q_learning(
           q_tm1,
