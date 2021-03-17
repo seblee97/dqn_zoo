@@ -59,7 +59,7 @@ echo "Build image with tag 'dqn_zoo_seb:latest' and run tests"
 docker build -t dqn_zoo_seb:latest "$WORK_DIR"
 
 echo "Run DQN on GPU in a container named dqn_zoo_dqn"
-docker run --gpus all --name dqn_zoo_dqn dqn_zoo:latest \
+docker run --gpus all --name dqn_zoo_dqn dqn_zoo_seb:latest \
     -m dqn_zoo.dqn.run_atari \
     --jax_platform_name=gpu \
     --environment_name=pong \
