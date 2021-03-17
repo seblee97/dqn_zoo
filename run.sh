@@ -53,10 +53,10 @@ echo "Remove container if it exists"
 docker rm dqn_zoo_dqn || true
 
 echo "Remove image if it exists"
-docker rmi dqn_zoo:latest || true
+docker rmi dqn_zoo_seb:latest || true
 
-echo "Build image with tag 'dqn_zoo:latest' and run tests"
-docker build -t dqn_zoo:latest "$WORK_DIR"
+echo "Build image with tag 'dqn_zoo_seb:latest' and run tests"
+docker build -t dqn_zoo_seb:latest "$WORK_DIR"
 
 echo "Run DQN on GPU in a container named dqn_zoo_dqn"
 docker run --gpus all --name dqn_zoo_dqn dqn_zoo:latest \
