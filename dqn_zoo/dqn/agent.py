@@ -90,8 +90,8 @@ class Dqn:
 
       td_errors = _batch_q_learning(
           q_tm1,
+          transitions.a_tm1,
           transitions.r_t,
-          shaped_rewards,
           transitions.discount_t,
           q_target_t,
       )
