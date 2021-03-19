@@ -33,6 +33,13 @@ class QNetworkOutputs(typing.NamedTuple):
   q_values: jnp.ndarray
 
 
+class MultiHeadQNetworkOutputs(typing.NamedTuple):
+  q_values: jnp.ndarray
+  multi_head_output: jnp.ndarray
+  random_head_q_value: jnp.ndarray
+
+
+
 class IqnInputs(typing.NamedTuple):
   state: jnp.ndarray
   taus: jnp.ndarray
@@ -356,5 +363,37 @@ def dqn_atari_network(num_actions: int) -> NetworkFn:
         dqn_value_head(num_actions),
     ])
     return QNetworkOutputs(q_values=network(inputs))
+
+  return net_fn
+
+
+def bootstrapped_dqn_multi_head_network(
+  num_actions: int, 
+  num_heads: int, 
+  mask_probability: float
+):
+  """DQN network with multiple heads (representing ensemble)."""
+
+  binomial_probabilities = jnp.array([mask_probability, 1 - mask_probability])
+
+  def net_fn(inputs):
+    """Function representing multi-head DQN Q-network."""
+    network = hk.Sequential([
+        dqn_torso(),
+        dqn_value_head(num_heads * num_actions),
+    ])
+    network_output = network(inputs)
+    multi_head_output = jnp.reshape(network_output, (-1, num_heads, num_actions))
+    mask = jax.random.choice(key=hk.next_rng_key(), a=2, shape=(multi_head_output.shape[0], num_heads,), p=binomial_probabilities)
+    random_head_indices = jax.random.choice(key=hk.next_rng_key(), a=num_heads, shape=(multi_head_output.shape[0], ))
+    random_head_q_value = jnp.reshape(multi_head_output[:, random_head_indices], (-1, num_actions))
+
+    # TODO: make the q values (used for eval) the output of voting or weighted mean.
+    # Currently random head q value used as placeholder
+    return MultiHeadQNetworkOutputs(
+      q_values=random_head_q_value,
+      multi_head_output=multi_head_output,
+      random_head_q_value=random_head_q_value
+    )
 
   return net_fn

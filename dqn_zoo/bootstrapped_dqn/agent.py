@@ -1,20 +1,4 @@
-# Copyright 2019 DeepMind Technologies Limited. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""DQN agent class."""
-
-# pylint: disable=g-bad-import-order
+"""Implementation of bootstrapped DQN (Osband 2016)"""
 
 from typing import Any, Callable, Mapping, Text
 
@@ -22,6 +6,7 @@ from absl import logging
 import dm_env
 import jax
 import jax.numpy as jnp
+import numpy as onp
 import optax
 import rlax
 
@@ -33,8 +18,8 @@ from dqn_zoo import replay as replay_lib
 _batch_q_learning = jax.vmap(rlax.q_learning)
 
 
-class Dqn:
-  """Deep Q-Network agent."""
+class BootstrappedDqn:
+  """Deep Q-Network agent with multiple heads."""
 
   def __init__(
       self,
@@ -45,6 +30,8 @@ class Dqn:
       transition_accumulator: Any,
       replay: replay_lib.TransitionReplay,
       shaping_function,
+      mask_probability: float,
+      num_heads: int,
       batch_size: int,
       exploration_epsilon: Callable[[int], float],
       min_replay_capacity_fraction: float,
@@ -56,6 +43,8 @@ class Dqn:
     self._preprocessor = preprocessor
     self._replay = replay
     self._transition_accumulator = transition_accumulator
+    self._mask_probabilities = jnp.array([mask_probability, 1 - mask_probability])
+    self._num_heads = num_heads
     self._batch_size = batch_size
     self._exploration_epsilon = exploration_epsilon
     self._min_replay_capacity = min_replay_capacity_fraction * replay.capacity
@@ -81,20 +70,30 @@ class Dqn:
       """Calculates loss given network parameters and transitions."""
       _, online_key, target_key = jax.random.split(rng_key, 3)
       q_tm1 = network.apply(online_params, online_key,
-                            transitions.s_tm1).q_values
+                            transitions.s_tm1).multi_head_output
       q_target_t = network.apply(target_params, target_key,
-                                 transitions.s_t).q_values
+                                 transitions.s_t).multi_head_output
+
+      # batch by num_heads -> batch by num_heads by num_actions
+      mask = jnp.einsum('ij,k->ijk', transitions.mask_t, jnp.ones(q_tm1.shape[-1]))
+
+      masked_q = jnp.multiply(mask, q_tm1)
+      masked_q_target = jnp.multiply(mask, q_target_t)
+
+      flattened_q = jnp.reshape(q_tm1, (q_tm1.shape[0], -1))
+      flattened_q_target = jnp.reshape(q_target_t, (q_target_t.shape[0], -1))
 
       # compute shaping function F(s, a, s')
       shaped_rewards = shaping_function(q_target_t, transitions, rng_key)
 
       td_errors = _batch_q_learning(
-          q_tm1,
+          flattened_q,
           transitions.a_tm1,
-          transitions.r_t,
+          shaped_rewards,
           transitions.discount_t,
-          q_target_t,
+          flattened_q_target,
       )
+
       td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
                                      grad_error_bound)
       losses = rlax.l2_loss(td_errors)
@@ -116,11 +115,17 @@ class Dqn:
     def select_action(rng_key, network_params, s_t, exploration_epsilon):
       """Samples action from eps-greedy policy wrt Q-values at given state."""
       rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
-      q_t = network.apply(network_params, apply_key, s_t[None, ...]).q_values[0]
+
+      q_t = network.apply(network_params, apply_key, s_t[None, ...]).random_head_q_value[0]
       a_t = rlax.epsilon_greedy().sample(policy_key, q_t, exploration_epsilon)
       return rng_key, a_t
 
     self._select_action = jax.jit(select_action)
+
+  def _get_random_mask(self, rng_key):
+    return jax.random.choice(
+      key=rng_key, a=2, shape=(self._num_heads,),
+      p=self._mask_probabilities)
 
   def step(self, timestep: dm_env.TimeStep) -> parts.Action:
     """Selects action given timestep and potentially learns."""
@@ -134,7 +139,16 @@ class Dqn:
       action = self._action = self._act(timestep)
 
       for transition in self._transition_accumulator.step(timestep, action):
-        self._replay.add(transition)
+        mask = self._get_random_mask(self._rng_key)
+        masked_transition = replay_lib.MaskedTransition(
+          s_tm1=transition.s_tm1,
+          a_tm1=transition.a_tm1,
+          r_t=transition.r_t,
+          discount_t=transition.discount_t,
+          s_t=transition.s_t,
+          mask_t=mask
+        )
+        self._replay.add(masked_transition)
 
     if self._replay.size < self._min_replay_capacity:
       return action
