@@ -17,7 +17,6 @@ arg_parser.add_argument("--num_gpus", type=int, help="number of GPUs to use for 
 arg_parser.add_argument("--gpu_type", type=str, help="type of GPU to use for job.")
 arg_parser.add_argument("--error_path", type=str, help="path of error file for job.")
 arg_parser.add_argument("--output_path", type=str, help="path of output file for job.")
-arg_parser.add_argument("--gpu_type", type=str, help="type of GPU to use for job.")
 
 
 def create_job_script(
