@@ -68,9 +68,9 @@ if __name__ == "__main__":
     args = arg_parser.parse_args()
 
     if args.modules is not None:
-	    modules = args.modules.split(",")
-	else:
-		modules = []
+        modules = args.modules.split(",")
+    else:
+        modules = []
 
     create_job_script(
         run_command=args.run_command,
