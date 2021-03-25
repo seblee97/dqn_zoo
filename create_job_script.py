@@ -17,6 +17,7 @@ arg_parser.add_argument("--num_gpus", type=int, help="number of GPUs to use for 
 arg_parser.add_argument("--gpu_type", type=str, help="type of GPU to use for job.")
 arg_parser.add_argument("--error_path", type=str, help="path of error file for job.")
 arg_parser.add_argument("--output_path", type=str, help="path of output file for job.")
+arg_parser.add_argument("--modules", type=str, help="list of modules to load.", default=None)
 
 
 def create_job_script(
@@ -29,6 +30,7 @@ def create_job_script(
     gpu_type: str,
     error_path: str,
     output_path: str,
+    modules: List[str],
     walltime: str = "24:0:0",
 ) -> None:
     """Create a job script for use on HPC.
@@ -62,6 +64,11 @@ def create_job_script(
 if __name__ == "__main__":
     args = arg_parser.parse_args()
 
+    if args.modules is not None:
+	    modules = args.modules.split(",")
+	else:
+		modules = []
+
     create_job_script(
         run_command=args.run_command,
         save_path=args.save_path,
@@ -72,4 +79,5 @@ if __name__ == "__main__":
         gpu_type=args.gpu_type,
         error_path=args.error_path,
         output_path=args.output_path,
+        modules=modules
     )
