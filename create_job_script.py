@@ -56,7 +56,7 @@ def create_job_script(
         file.write("module load anaconda3/personal\n")
         # load other relevant modules, e.g. cuda
         for module in modules:
-			file.write(f"module load {module}\n")        	
+            file.write(f"module load {module}\n")        	
         file.write(f"source activate {conda_env_name}\n")
         # change to dir where job was submitted from
         file.write("cd $PBS_O_WORKDIR\n")
