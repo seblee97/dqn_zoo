@@ -1,5 +1,7 @@
 import argparse
 
+from typing import List
+
 
 arg_parser = argparse.ArgumentParser()
 
