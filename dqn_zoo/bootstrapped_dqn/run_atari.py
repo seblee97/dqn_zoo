@@ -56,18 +56,13 @@ flags.DEFINE_integer('num_train_frames', int(1e6), '')  # Per iteration.
 flags.DEFINE_integer('num_eval_frames', int(5e5), '')  # Per iteration.
 flags.DEFINE_integer('learn_period', 16, '')
 flags.DEFINE_string('results_csv_path', '/tmp/results.csv', '')
+flags.DEFINE_string('jax_platform_name', 'gpu', '') # jax backend gpu or cpu
 
 
 def main(argv):
   """Trains DQN agent on Atari."""
   del argv
-  
-  try:
-    backend = jax.lib.xla_bridge.get_backend().platform
-  except RuntimeError:
-    backend = 'cpu'
-
-  logging.info('Boostrapped DQN on Atari on %s.', backend)
+  logging.info('Boostrapped DQN on Atari on %s.', jax.lib.xla_bridge.get_backend().platform)
   random_state = np.random.RandomState(FLAGS.seed)
   rng_key = jax.random.PRNGKey(
       random_state.randint(-sys.maxsize - 1, sys.maxsize + 1))
@@ -255,7 +250,7 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  config.update('jax_platform_name', 'gpu')  # Default to GPU.
+  # config.update('jax_platform_name', 'gpu')  # Default to GPU.
   config.update('jax_numpy_rank_promotion', 'raise')
   config.config_with_absl()
   app.run(main)
