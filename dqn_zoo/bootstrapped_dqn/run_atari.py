@@ -56,7 +56,6 @@ flags.DEFINE_integer('num_train_frames', int(1e6), '')  # Per iteration.
 flags.DEFINE_integer('num_eval_frames', int(5e5), '')  # Per iteration.
 flags.DEFINE_integer('learn_period', 16, '')
 flags.DEFINE_string('results_csv_path', '/tmp/results.csv', '')
-flags.DEFINE_string('jax_backend', 'gpu', '')  # gpu or cpu
 
 
 def main(argv):
@@ -250,7 +249,7 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  config.update('jax_platform_name', FLAGS.jax_backend)  # Default to GPU.
+  config.update('jax_platform_name', 'gpu')  # Default to GPU.
   config.update('jax_numpy_rank_promotion', 'raise')
   config.config_with_absl()
   app.run(main)
