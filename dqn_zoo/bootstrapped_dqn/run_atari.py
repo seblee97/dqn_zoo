@@ -61,7 +61,13 @@ flags.DEFINE_string('results_csv_path', '/tmp/results.csv', '')
 def main(argv):
   """Trains DQN agent on Atari."""
   del argv
-  logging.info('Boostrapped DQN on Atari on %s.', jax.lib.xla_bridge.get_backend().platform)
+  
+  try:
+    backend = jax.lib.xla_bridge.get_backend().platform
+  except RuntimeError:
+    backend = 'cpu'
+
+  logging.info('Boostrapped DQN on Atari on %s.', backend)
   random_state = np.random.RandomState(FLAGS.seed)
   rng_key = jax.random.PRNGKey(
       random_state.randint(-sys.maxsize - 1, sys.maxsize + 1))
