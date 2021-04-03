@@ -24,7 +24,6 @@ try:
     import cPickle as pickle
 except ModuleNotFoundError:
     import pickle
-import dill
 from typing import Any, Iterable, Mapping, Optional, Text, Tuple, Union
 
 import dm_env
