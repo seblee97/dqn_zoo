@@ -20,6 +20,11 @@ import collections
 import csv
 import os
 import timeit
+try:
+    import cPickle as pickle
+except ModuleNotFoundError:
+    import pickle
+import dill
 from typing import Any, Iterable, Mapping, Optional, Text, Tuple, Union
 
 import dm_env
@@ -357,6 +362,24 @@ class CsvWriter:
     self._fieldnames = state['fieldnames']
 
 
+class ImplementedCheckpoint:
+  def __init__(self, checkpoint_path: str):
+    self._checkpoint_path = checkpoint_path
+    self._can_be_restored = os.path.exists(self._checkpoint_path)
+    self.state = AttributeDict()
+
+  def save(self) -> None:
+    with open(self._checkpoint_path, "wb") as checkpoint_file:
+      pickle.dump(self.state, checkpoint_file, protocol=pickle.HIGHEST_PROTOCOL)
+
+  def can_be_restored(self) -> bool:
+    return self._can_be_restored
+    
+  def restore(self) -> None:
+    with open(self._checkpoint_path, "rb") as checkpoint_file:
+      self.state = pickle.load(checkpoint_file)
+
+
 class NullCheckpoint:
   """A placeholder checkpointing object that does nothing.
 
@@ -381,7 +404,10 @@ class AttributeDict(dict):
   """A `dict` that supports getting, setting, deleting keys via attributes."""
 
   def __getattr__(self, key):
-    return self[key]
+    try:
+      return self[key]
+    except KeyError:
+      raise AttributeError
 
   def __setattr__(self, key, value):
     self[key] = value
