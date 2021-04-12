@@ -255,7 +255,7 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  # config.update('jax_platform_name', 'gpu')  # Default to GPU.
+  config.update('jax_platform_name', 'gpu')  # Default to GPU.
   config.update('jax_numpy_rank_promotion', 'raise')
   config.config_with_absl()
   app.run(main)
