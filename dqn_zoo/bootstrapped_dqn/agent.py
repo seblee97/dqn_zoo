@@ -68,7 +68,7 @@ class BootstrappedDqn:
 
     def loss_fn(online_params, target_params, transitions, rng_key):
       """Calculates loss given network parameters and transitions."""
-      _, online_key, target_key = jax.random.split(rng_key, 3)
+      _, online_key, target_key, shaping_key = jax.random.split(rng_key, 4)
       q_tm1 = network.apply(online_params, online_key,
                             transitions.s_tm1).multi_head_output
       q_target_t = network.apply(target_params, target_key,
@@ -84,7 +84,7 @@ class BootstrappedDqn:
       flattened_q_target = jnp.reshape(q_target_t, (q_target_t.shape[0], -1))
 
       # compute shaping function F(s, a, s')
-      shaped_rewards = shaping_function(q_target_t, transitions, rng_key)
+      shaped_rewards = shaping_function(q_target_t, transitions, shaping_key)
 
       td_errors = _batch_q_learning(
           flattened_q,
