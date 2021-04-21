@@ -80,24 +80,28 @@ class BootstrappedDqn:
       masked_q = jnp.multiply(mask, q_tm1)
       masked_q_target = jnp.multiply(mask, q_target_t)
 
-      flattened_q = jnp.reshape(q_tm1, (q_tm1.shape[0], -1))
-      flattened_q_target = jnp.reshape(q_target_t, (q_target_t.shape[0], -1))
+      flattened_q = jnp.reshape(q_tm1, (-1, q_tm1.shape[-1]))
+      flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
 
       # compute shaping function F(s, a, s')
       shaped_rewards = shaping_function(q_target_t, transitions, shaping_key)
 
+      repeated_actions = jnp.repeat(transitions.a_tm1, num_heads)
+      repeated_rewards = jnp.repeat(shaped_rewards, num_heads)
+      repeated_discounts = jnp.repeat(transitions.discount_t, num_heads)
+
       td_errors = _batch_q_learning(
           flattened_q,
-          transitions.a_tm1,
-          shaped_rewards,
-          transitions.discount_t,
+          repeated_actions,
+          repeated_rewards,
+          repeated_discounts,
           flattened_q_target,
       )
 
       td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
                                      grad_error_bound)
       losses = rlax.l2_loss(td_errors)
-      assert losses.shape == (self._batch_size,)
+      assert losses.shape == (self._batch_size * num_heads,)
       loss = jnp.mean(losses)
       return loss
 
