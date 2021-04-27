@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import jax
 
 
 class NoPenalty:
@@ -29,13 +30,26 @@ class UncertaintyPenalty:
     self._multiplicative_factor = multiplicative_factor
 
   def __call__(self, target_q_values, transitions, rng_key):
-    pass
+    state_action_values = target_q_values[jnp.arange(len(target_q_values)), :, transitions.a_tm1]
+    penalty_terms = self._multiplicative_factor * jnp.std(state_action_values, axis=1)
+
+    return transitions.r_t + penalty_terms
 
 class PolicyEntropyPenalty:
   """Adaptive penalty based on policy entropy of ensemble."""
 
-  def __init__(self, multiplicative_factor: float):
+  def __init__(self, multiplicative_factor: float, num_actions: int):
     self._multiplicative_factor = multiplicative_factor
+    LOG_EPSILON = 0.0001
+
+    def compute_entropy(max_indices):
+      max_index_probabilities = jnp.bincount(max_indices, minlength=num_actions, length=num_actions) / len(max_indices)
+      entropy = -jnp.sum((max_index_probabilities + LOG_EPSILON) * jnp.log(max_index_probabilities + LOG_EPSILON))
+      return entropy
+
+    self._compute_entropy = jax.vmap(compute_entropy, in_axes=(0))
 
   def __call__(self, target_q_values, transitions, rng_key):
-    pass
+    max_indices = jnp.argmax(target_q_values, axis=-1)
+    return self._compute_entropy(max_indices)
+    
