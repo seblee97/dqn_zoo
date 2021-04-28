@@ -32,7 +32,6 @@ class UncertaintyPenalty:
   def __call__(self, target_q_values, transitions, rng_key):
     state_action_values = target_q_values[jnp.arange(len(target_q_values)), :, transitions.a_tm1]
     penalty_terms = self._multiplicative_factor * jnp.std(state_action_values, axis=1)
-
     return transitions.r_t + penalty_terms
 
 class PolicyEntropyPenalty:
@@ -51,5 +50,6 @@ class PolicyEntropyPenalty:
 
   def __call__(self, target_q_values, transitions, rng_key):
     max_indices = jnp.argmax(target_q_values, axis=-1)
-    return self._compute_entropy(max_indices)
+    penalty_terms = self._multiplicative_factor * self._compute_entropy(max_indices)
+    return transitions.r_t + penalty_terms
     
