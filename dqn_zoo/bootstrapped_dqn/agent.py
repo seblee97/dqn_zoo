@@ -15,8 +15,8 @@ from dqn_zoo import processors
 from dqn_zoo import replay as replay_lib
 
 # Batch variant of q_learning.
-_batch_q_learning = jax.vmap(rlax.q_learning)
-
+# _batch_q_learning = jax.vmap(rlax.q_learning)
+_batch_double_q_learning = jax.vmap(rlax.double_q_learning)
 
 class BootstrappedDqn:
   """Deep Q-Network agent with multiple heads."""
@@ -68,41 +68,41 @@ class BootstrappedDqn:
 
     def loss_fn(online_params, target_params, transitions, rng_key):
       """Calculates loss given network parameters and transitions."""
-      _, online_key, target_key, shaping_key = jax.random.split(rng_key, 4)
-      q_tm1 = network.apply(online_params, online_key,
+      _, *apply_keys = jax.random.split(rng_key, 5)
+      q_tm1 = network.apply(online_params, apply_keys[0],
                             transitions.s_tm1).multi_head_output
-      q_target_t = network.apply(target_params, target_key,
+      q_t = network.apply(online_params, apply_keys[1],
+                          transitions.s_t).multi_head_output
+      q_target_t = network.apply(target_params, apply_keys[2],
                                  transitions.s_t).multi_head_output
 
-      # batch by num_heads -> batch by num_heads by num_actions
-      mask = jnp.einsum('ij,k->ijk', transitions.mask_t, jnp.ones(q_tm1.shape[-1]))
-
-      masked_q = jnp.multiply(mask, q_tm1)
-      masked_q_target = jnp.multiply(mask, q_target_t)
-
       flattened_q = jnp.reshape(q_tm1, (-1, q_tm1.shape[-1]))
+      flattened_q_t = jnp.reshape(q_t, (-1, q_t.shape[-1]))
       flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
 
       # compute shaping function F(s, a, s')
-      shaped_rewards = shaping_function(q_target_t, transitions, shaping_key)
+      shaped_rewards = shaping_function(q_target_t, transitions, apply_keys[3])
 
       repeated_actions = jnp.repeat(transitions.a_tm1, num_heads)
       repeated_rewards = jnp.repeat(shaped_rewards, num_heads)
       repeated_discounts = jnp.repeat(transitions.discount_t, num_heads)
 
-      td_errors = _batch_q_learning(
+      td_errors = _batch_double_q_learning(
           flattened_q,
           repeated_actions,
           repeated_rewards,
           repeated_discounts,
           flattened_q_target,
+          flattened_q_t,
       )
 
-      td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
-                                     grad_error_bound)
+      td_errors = rlax.clip_gradient(td_errors, -grad_error_bound/num_heads,
+                                     grad_error_bound/num_heads)
       losses = rlax.l2_loss(td_errors)
       assert losses.shape == (self._batch_size * num_heads,)
-      loss = jnp.mean(losses)
+      
+      mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
+      loss = jnp.sum(mask * losses) / jnp.sum(mask)
       return loss
 
     def update(rng_key, opt_state, online_params, target_params, transitions):
@@ -120,7 +120,7 @@ class BootstrappedDqn:
       """Samples action from eps-greedy policy wrt Q-values at given state."""
       rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
 
-      q_t = network.apply(network_params, apply_key, s_t[None, ...]).random_head_q_value[0]
+      q_t = network.apply(network_params, apply_key, s_t[None, ...]).q_values[0]
       a_t = rlax.epsilon_greedy().sample(policy_key, q_t, exploration_epsilon)
       return rng_key, a_t
 
