@@ -166,6 +166,8 @@ def main(argv):
     shaping_function = shaping.UncertaintyPenalty(multiplicative_factor=FLAGS.shaping_multiplicative_factor)
   elif FLAGS.shaping_function_type == constants.POLICY_ENTROPY_PENALTY:
     shaping_function = shaping.PolicyEntropyPenalty(multiplicative_factor=FLAGS.shaping_multiplicative_factor, num_actions=num_actions)
+  elif FLAGS.shaping_function_type == constants.MUNCHAUSEN_PENALTY:
+    shaping_function = shaping.MunchausenPenalty(multiplicative_factor=FLAGS.shaping_multiplicative_factor)
 
   train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
