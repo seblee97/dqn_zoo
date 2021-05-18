@@ -391,7 +391,7 @@ def bootstrapped_dqn_multi_head_network(
     # TODO: make the q values (used for eval) the output of voting or weighted mean.
     # Currently random head q value used as placeholder
     return MultiHeadQNetworkOutputs(
-      q_values=random_head_q_value,
+      q_values=jnp.mean(multi_head_output, axis=1),
       multi_head_output=multi_head_output,
       random_head_q_value=random_head_q_value
     )
