@@ -59,15 +59,22 @@ class MunchausenPenalty:
   Based on M-IQN thinking in Munchausen RL: https://arxiv.org/pdf/2007.14430.pdf
   """
 
-  def __init__(self, multiplicative_factor: float):
+  def __init__(self, multiplicative_factor: float, num_actions: int):
     self._multiplicative_factor = multiplicative_factor
+    LOG_EPSILON = 0.0001
+
+    def compute_log_policy(max_indices):
+      max_index_probabilities = jnp.bincount(max_indices, minlength=num_actions, length=num_actions) / len(max_indices)
+      log_policy = jnp.log(max_index_probabilities + LOG_EPSILON)
+      return log_policy
+
+    self._compute_log_policy = jax.vmap(compute_log_policy, in_axes=(0))
 
   def __call__(self, target_q_values, transitions, rng_key):
+    max_indices = jnp.argmax(target_q_values, axis=-1)
+    log_policy = self._compute_log_policy(max_indices)
+    action_log_policy = log_policy[jnp.arange(len(log_policy)), transitions.a_tm1]
 
-    mean_target_q_values = jnp.mean(target_q_values, axis=1) # implicit policy for distribution
-    policy = mean_target_q_values[jnp.arange(len(mean_target_q_values)), transitions.a_tm1]
-    log_policy = jnp.log(policy)
-    
-    raise NotImplementedError("Log policy, for negative Q-values? Need to have Q network output log of values?")
+    penalty_terms = self._multiplicative_factor * action_log_policy
 
-    return transitions.r_1 + self._multiplicative_factor * log_policy
+    return transitions.r_t + penalty_terms
