@@ -56,7 +56,7 @@ class PolicyEntropyPenalty:
 class MunchausenPenalty:
   """Adaptive penalty that adds scaled log policy to the reward.
   
-  Based on M-IQN thinking in Munchausen RL: https://arxiv.org/pdf/2007.14430.pdf
+  Based Munchausen RL: https://arxiv.org/pdf/2007.14430.pdf
   """
 
   def __init__(self, multiplicative_factor: float, num_actions: int):
