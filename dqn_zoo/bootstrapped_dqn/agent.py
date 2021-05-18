@@ -15,7 +15,7 @@ from dqn_zoo import processors
 from dqn_zoo import replay as replay_lib
 
 # Batch variant of q_learning.
-# _batch_q_learning = jax.vmap(rlax.q_learning)
+_batch_q_learning = jax.vmap(rlax.q_learning)
 _batch_double_q_learning = jax.vmap(rlax.double_q_learning)
 
 class BootstrappedDqn:
