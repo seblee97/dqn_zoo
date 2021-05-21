@@ -205,13 +205,14 @@ def main(argv):
     train_agent.set_state(state=checkpoint.state.train_agent)
     eval_agent.set_state(state=checkpoint.state.eval_agent)
     writer.set_state(state=checkpoint.state.writer)
-
-  state = checkpoint.state
-  state.iteration = 0
-  state.train_agent = train_agent.get_state()
-  state.eval_agent = eval_agent.get_state()
-  state.random_state = random_state
-  state.writer = writer.get_state()
+    state = checkpoint.state
+  else:
+    state = checkpoint.state
+    state.iteration = 0
+    state.train_agent = train_agent.get_state()
+    state.eval_agent = eval_agent.get_state()
+    state.random_state = random_state
+    state.writer = writer.get_state()
 
   while state.iteration <= FLAGS.num_iterations:
     # New environment for each iteration to allow for determinism if preempted.
