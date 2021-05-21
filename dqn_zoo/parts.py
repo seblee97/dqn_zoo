@@ -331,7 +331,7 @@ class CsvWriter:
   def write(self, values: collections.OrderedDict) -> None:
     """Appends given values as new row to CSV file."""
     if self._fieldnames is None:
-      self._fieldnames = values.keys()
+      self._fieldnames = list(values.keys())
     # Open a file in 'append' mode, so we can continue logging safely to the
     # same file after e.g. restarting from a checkpoint.
     with open(self._fname, 'a') as file:
@@ -364,12 +364,16 @@ class CsvWriter:
 class ImplementedCheckpoint:
   def __init__(self, checkpoint_path: str):
     self._checkpoint_path = checkpoint_path
-    self._can_be_restored = os.path.exists(self._checkpoint_path)
+    if self._checkpoint_path is not None: 
+      self._can_be_restored = os.path.exists(self._checkpoint_path)
+    else:
+      self._can_be_restored = False
     self.state = AttributeDict()
 
   def save(self) -> None:
-    with open(self._checkpoint_path, "wb") as checkpoint_file:
-      pickle.dump(self.state, checkpoint_file, protocol=pickle.HIGHEST_PROTOCOL)
+    if self._checkpoint_path is not None:
+      with open(self._checkpoint_path, "wb") as checkpoint_file:
+        pickle.dump(self.state, checkpoint_file, protocol=pickle.HIGHEST_PROTOCOL)
 
   def can_be_restored(self) -> bool:
     return self._can_be_restored
