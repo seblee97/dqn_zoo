@@ -56,7 +56,7 @@ flags.DEFINE_integer('num_train_frames', int(1e6), '')  # Per iteration.
 flags.DEFINE_integer('num_eval_frames', int(5e5), '')  # Per iteration.
 flags.DEFINE_integer('learn_period', 16, '')
 flags.DEFINE_string('results_csv_path', '/tmp/results.csv', '')
-flags.DEFINE_string('checkpoint_path', '/tmp/checkpoint.pkl', '')
+flags.DEFINE_string('checkpoint_path', None, '')
 
 
 def main(argv):
@@ -202,29 +202,25 @@ def main(argv):
 
   if checkpoint.can_be_restored():
     checkpoint.restore()
+    iteration = checkpoint.state.iteration
+    random_state = checkpoint.state.random_state
     train_agent.set_state(state=checkpoint.state.train_agent)
     eval_agent.set_state(state=checkpoint.state.eval_agent)
     writer.set_state(state=checkpoint.state.writer)
-    state = checkpoint.state
   else:
-    state = checkpoint.state
-    state.iteration = 0
-    state.train_agent = train_agent.get_state()
-    state.eval_agent = eval_agent.get_state()
-    state.random_state = random_state
-    state.writer = writer.get_state()
+    iteration = 0
 
-  while state.iteration <= FLAGS.num_iterations:
+  while iteration <= FLAGS.num_iterations:
     # New environment for each iteration to allow for determinism if preempted.
     env = environment_builder()
 
-    logging.info('Training iteration %d.', state.iteration)
+    logging.info('Training iteration %d.', iteration)
     train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
-    num_train_frames = 0 if state.iteration == 0 else FLAGS.num_train_frames
+    num_train_frames = 0 if iteration == 0 else FLAGS.num_train_frames
     train_seq_truncated = itertools.islice(train_seq, num_train_frames)
     train_stats = parts.generate_statistics(train_seq_truncated)
 
-    logging.info('Evaluation iteration %d.', state.iteration)
+    logging.info('Evaluation iteration %d.', iteration)
     eval_agent.network_params = train_agent.online_params
     eval_seq = parts.run_loop(eval_agent, env, FLAGS.max_frames_per_episode)
     eval_seq_truncated = itertools.islice(eval_seq, FLAGS.num_eval_frames)
@@ -235,8 +231,8 @@ def main(argv):
         FLAGS.environment_name, eval_stats['episode_return'])
     capped_human_normalized_score = np.amin([1., human_normalized_score])
     log_output = [
-        ('iteration', state.iteration, '%3d'),
-        ('frame', state.iteration * FLAGS.num_train_frames, '%5d'),
+        ('iteration', iteration, '%3d'),
+        ('frame', iteration * FLAGS.num_train_frames, '%5d'),
         ('eval_episode_return', eval_stats['episode_return'], '% 2.2f'),
         ('train_episode_return', train_stats['episode_return'], '% 2.2f'),
         ('eval_num_episodes', eval_stats['num_episodes'], '%3d'),
@@ -251,7 +247,15 @@ def main(argv):
     log_output_str = ', '.join(('%s: ' + f) % (n, v) for n, v, f in log_output)
     logging.info(log_output_str)
     writer.write(collections.OrderedDict((n, v) for n, v, _ in log_output))
-    state.iteration += 1
+
+    iteration += 1
+
+    # update state before checkpointing
+    checkpoint.state.iteration = iteration
+    checkpoint.state.train_agent = train_agent.get_state()
+    checkpoint.state.eval_agent = eval_agent.get_state()
+    checkpoint.state.random_state = random_state
+    checkpoint.state.writer = writer.get_state()
     checkpoint.save()
 
   writer.close()
