@@ -21,6 +21,13 @@ arg_parser.add_argument("--error_path", type=str, help="path of error file for j
 arg_parser.add_argument("--output_path", type=str, help="path of output file for job.")
 arg_parser.add_argument("--modules", type=str, help="list of modules to load.", default=None)
 
+arg_parser.add_argument(
+    "--flat_chain", 
+    type=int, 
+    help="create a flat chain script with specified amount of repeats.", 
+    default=None
+)
+
 
 def create_job_script(
     run_command: str,
@@ -66,6 +73,20 @@ def create_job_script(
         file.write(f"{run_command}\n")
 
 
+INT_STR_MAPPING = {0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+
+
+def create_flat_chain_script(script_name: str, num_repeats: int):
+    flat_chain_save_path = f"flat_chain_{script_name}"
+    with open(flat_chain_save_path, "w") as file:
+        file.write("#!/bin/bash\n")
+        file.write(f"{INT_STR_MAPPING[0]}=$(qsub {script_name})\n")
+        file.write(f"echo ${INT_STR_MAPPING[0]}\n")
+        for i in range(1, num_repeats):
+            file.write(f"{INT_STR_MAPPING[i]}=$(qsub -W depend=afterok:${INT_STR_MAPPING[i-1]} {script_name})\n")
+            file.write(f"echo ${INT_STR_MAPPING[i]}\n")
+
+
 if __name__ == "__main__":
     args = arg_parser.parse_args()
 
@@ -86,3 +107,6 @@ if __name__ == "__main__":
         output_path=args.output_path,
         modules=modules
     )
+
+    if args.flat_chain is not None:
+        create_flat_chain_script(script_name=args.save_path, num_repeats=args.flat_chain)
