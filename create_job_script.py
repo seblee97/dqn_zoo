@@ -79,6 +79,8 @@ def create_job_script(
         file.write(f"source activate {conda_env_name}\n")
         # change to dir where job was submitted from
         file.write("cd $PBS_O_WORKDIR\n")
+        file.write("mkdir results\n")
+        file.write("mkdir results/$TIMESTAMP\n")
         # job script
         run_command = run_command or (
             f"python -m dqn_zoo.{algorithm}.run_atari --environment_name {environment} "
