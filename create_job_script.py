@@ -61,13 +61,13 @@ def create_job_script(
             walltime: time to give job--1 day by default
     """
     with open(save_path, "w") as file:
-        file.write("TIMESTAMP=$(date '+%Y_%m_%d_%H_%M_%S'\n")
-        file.write("RESULTS_FOLDER='results/$TIMESTAMP'\n")
         resource_specification = f"#PBS -lselect=1:ncpus={num_cpus}:mem={memory}gb"
         if num_gpus:
             resource_specification += f":ngpus={num_gpus}:gpu_type={gpu_type}"
         file.write(f"{resource_specification}\n")
         file.write(f"#PBS -lwalltime={walltime}\n")
+        file.write("TIMESTAMP=$(date '+%Y_%m_%d_%H_%M_%S'\n")
+        file.write("RESULTS_FOLDER='results/$TIMESTAMP'\n")
         # output/error file paths
         file.write(f"#PBS -e $RESULTS_FOLDER/error.txt\n")
         file.write(f"#PBS -o $RESULTS_FOLDER/output.txt\n")
