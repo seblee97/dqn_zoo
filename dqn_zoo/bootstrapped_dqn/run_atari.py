@@ -34,16 +34,16 @@ flags.DEFINE_bool('compress_state', True, '')
 flags.DEFINE_float('min_replay_capacity_fraction', 0.05, '')
 flags.DEFINE_string('shaping_function_type', 'no_penalty', '')
 flags.DEFINE_float('shaping_multiplicative_factor', -0.05, '')
-flags.DEFINE_integer('num_heads', 5, '')
-flags.DEFINE_float('mask_probability', 0.5, '')
+flags.DEFINE_integer('num_heads', 10, '')
+flags.DEFINE_float('mask_probability', 0.25, '')
 flags.DEFINE_integer('batch_size', 32, '')
 flags.DEFINE_integer('max_frames_per_episode', 108000, '')  # 30 mins.
 flags.DEFINE_integer('num_action_repeats', 4, '')
 flags.DEFINE_integer('num_stacked_frames', 4, '')
 flags.DEFINE_float('exploration_epsilon_begin_value', 1., '')
-flags.DEFINE_float('exploration_epsilon_end_value', 0.1, '')
+flags.DEFINE_float('exploration_epsilon_end_value', 0.01, '')
 flags.DEFINE_float('exploration_epsilon_decay_frame_fraction', 0.02, '')
-flags.DEFINE_float('eval_exploration_epsilon', 0.05, '')
+flags.DEFINE_float('eval_exploration_epsilon', 0.01, '')
 flags.DEFINE_integer('target_network_update_period', int(4e4), '')
 flags.DEFINE_float('grad_error_bound', 1. / 32, '')
 flags.DEFINE_float('learning_rate', 0.00025, '')
@@ -262,7 +262,7 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  config.update('jax_platform_name', 'gpu')  # Default to GPU.
+  config.update('jax_platform_name', 'cpu')  # Default to GPU.
   config.update('jax_numpy_rank_promotion', 'raise')
   config.config_with_absl()
   app.run(main)
