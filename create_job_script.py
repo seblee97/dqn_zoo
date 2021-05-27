@@ -66,7 +66,7 @@ def create_job_script(
             resource_specification += f":ngpus={num_gpus}:gpu_type={gpu_type}"
         file.write(f"{resource_specification}\n")
         file.write(f"#PBS -lwalltime={walltime}\n")
-        file.write("TIMESTAMP=$(date '+%Y_%m_%d_%H_%M_%S'\n")
+        file.write("TIMESTAMP=$(date '+%Y_%m_%d_%H_%M_%S')\n")
         file.write("RESULTS_FOLDER='results/$TIMESTAMP'\n")
         # output/error file paths
         file.write(f"#PBS -e $RESULTS_FOLDER/error.txt\n")
