@@ -128,7 +128,7 @@ if __name__ == "__main__":
     cwd = os.getcwd()
     results_folder = os.path.join(cwd, "results", timestamp)
 
-    os.makedirs(results_folder, exist_ok=True)argsz
+    os.makedirs(results_folder, exist_ok=True)
 
     create_job_script(
         run_command=args.run_command,
