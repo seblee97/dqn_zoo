@@ -52,6 +52,7 @@ def create_job_script(
     # output_path: str,
     modules: List[str],
     results_folder: str,
+    source_code_dir: str,
     walltime: str = "24:0:0",
 ) -> None:
     """Create a job script for use on HPC.
@@ -70,7 +71,7 @@ def create_job_script(
             resource_specification += f":ngpus={num_gpus}:gpu_type={gpu_type}"
         file.write(f"{resource_specification}\n")
         file.write(f"#PBS -lwalltime={walltime}\n")
-        file.write("cd $PBS_O_WORKDIR\n")
+        # file.write("cd $PBS_O_WORKDIR\n")
         # output/error file paths
         file.write(f"#PBS -e {results_folder}/error.txt\n")
         file.write(f"#PBS -o {results_folder}/output.txt\n")
@@ -81,13 +82,14 @@ def create_job_script(
             file.write(f"module load {module}\n")        	
         file.write(f"source activate {conda_env_name}\n")
         # change to dir where job was submitted from
-        file.write("if [ -d results ]\n")
-        file.write("then\n")
-        file.write("    mkdir results\n")
-        file.write(f"if [ -d {results_folder} ]\n")
-        file.write("then\n")
-        file.write(f"    mkdir {results_folder}\n")
+        # file.write("if [ -d results ]\n")
+        # file.write("then\n")
+        # file.write("    mkdir results\n")
+        # file.write(f"if [ -d {results_folder} ]\n")
+        # file.write("then\n")
+        # file.write(f"    mkdir {results_folder}\n")
         # job script
+        file.write(f"cd {source_code_dir}\n")
         run_command = run_command or (
             f"python -m dqn_zoo.{algorithm}.run_atari --environment_name {environment} "
             f"--shaping_function_type {penalty} "
@@ -121,7 +123,9 @@ if __name__ == "__main__":
 
     raw_datetime = datetime.datetime.fromtimestamp(time.time())
     timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
-    results_folder = os.path.join("results", timestamp)
+
+    cwd = os.getcwd()
+    results_folder = os.path.join(cwd, "results", timestamp
 
     os.makedirs(results_folder, exist_ok=True)
 
@@ -140,6 +144,7 @@ if __name__ == "__main__":
         # output_path=args.output_path,
         modules=modules,
         results_folder=results_folder,
+        source_code_dir=cwd,
         walltime=f"{str(args.num_hours)}:0:0",
     )
 
