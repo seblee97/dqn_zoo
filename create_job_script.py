@@ -127,7 +127,7 @@ if __name__ == "__main__":
         # error_path=args.error_path,
         # output_path=args.output_path,
         modules=modules,
-        walltime=f"{args.num_hours}:0:0",
+        walltime=f"{str(args.num_hours)}:0:0",
     )
 
     if args.flat_chain is not None:
