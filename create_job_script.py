@@ -2,6 +2,7 @@ import argparse
 import time
 import datetime
 import os
+import subprocess
 
 from typing import List, Union
 
@@ -35,6 +36,8 @@ arg_parser.add_argument(
     help="create a flat chain script with specified amount of repeats.", 
     default=None
 )
+
+arg_parser.add_argument("--run", action='store_true', help="whether to diirectly run flat chain script.")
 
 
 def create_job_script(
@@ -151,3 +154,7 @@ if __name__ == "__main__":
 
     if args.flat_chain is not None:
         create_flat_chain_script(results_folder=results_folder, script_name=args.save_path, num_repeats=args.flat_chain)
+
+    if args.run:
+        flat_chain_script_path = os.path.join(results_folder, f"flat_chain_{args.save_path}")
+        subprocess.call(f"sh {flat_chain_script_path}")
