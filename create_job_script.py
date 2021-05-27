@@ -103,13 +103,14 @@ INT_STR_MAPPING = {0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "fiv
 
 
 def create_flat_chain_script(results_folder: str, script_name: str, num_repeats: int):
+    full_script_name = os.path.join(results_folder, save_path)
     flat_chain_save_path = os.path.join(results_folder, f"flat_chain_{script_name}")
     with open(flat_chain_save_path, "w") as file:
         file.write("#!/bin/bash\n")
-        file.write(f"{INT_STR_MAPPING[0]}=$(qsub {script_name})\n")
+        file.write(f"{INT_STR_MAPPING[0]}=$(qsub {full_script_name})\n")
         file.write(f"echo ${INT_STR_MAPPING[0]}\n")
         for i in range(1, num_repeats):
-            file.write(f"{INT_STR_MAPPING[i]}=$(qsub -W depend=afterok:${INT_STR_MAPPING[i-1]} {script_name})\n")
+            file.write(f"{INT_STR_MAPPING[i]}=$(qsub -W depend=afterok:${INT_STR_MAPPING[i-1]} {full_script_name})\n")
             file.write(f"echo ${INT_STR_MAPPING[i]}\n")
 
 
@@ -127,7 +128,7 @@ if __name__ == "__main__":
     cwd = os.getcwd()
     results_folder = os.path.join(cwd, "results", timestamp)
 
-    os.makedirs(results_folder, exist_ok=True)
+    os.makedirs(results_folder, exist_ok=True)argsz
 
     create_job_script(
         run_command=args.run_command,
