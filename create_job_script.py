@@ -1,4 +1,6 @@
 import argparse
+import time
+import datetime
 
 from typing import List, Union
 
@@ -48,6 +50,7 @@ def create_job_script(
     # error_path: str,
     # output_path: str,
     modules: List[str],
+    results_folder: str,
     walltime: str = "24:0:0",
 ) -> None:
     """Create a job script for use on HPC.
@@ -60,18 +63,16 @@ def create_job_script(
             memory: number of gb memory to allocate to node.
             walltime: time to give job--1 day by default
     """
-    with open(save_path, "w") as file:
+    with open(os.path.join(results_folder, save_path), "w") as file:
         resource_specification = f"#PBS -lselect=1:ncpus={num_cpus}:mem={memory}gb"
         if num_gpus:
             resource_specification += f":ngpus={num_gpus}:gpu_type={gpu_type}"
         file.write(f"{resource_specification}\n")
         file.write(f"#PBS -lwalltime={walltime}\n")
         file.write("cd $PBS_O_WORKDIR\n")
-        file.write("TIMESTAMP=$(date '+%Y_%m_%d_%H_%M_%S')\n")
-        file.write("RESULTS_FOLDER=results/$TIMESTAMP\n")
         # output/error file paths
-        file.write(f"#PBS -e $RESULTS_FOLDER/error.txt\n")
-        file.write(f"#PBS -o $RESULTS_FOLDER/output.txt\n")
+        file.write(f"#PBS -e {results_folder}/error.txt\n")
+        file.write(f"#PBS -o {results_folder}/output.txt\n")
         # initialise conda env
         file.write("module load anaconda3/personal\n")
         # load other relevant modules, e.g. cuda
@@ -81,26 +82,25 @@ def create_job_script(
         # change to dir where job was submitted from
         file.write("if [ -d results ]\n")
         file.write("then\n")
-        file.write("mkdir results\n")
-        file.write("if [ -d results/$TIMESTAMP ]\n")
+        file.write("    mkdir results\n")
+        file.write(f"if [ -d {results_folder} ]\n")
         file.write("then\n")
-        file.write("mkdir results/$TIMESTAMP\n")
+        file.write(f"    mkdir {results_folder}\n")
         # job script
         run_command = run_command or (
             f"python -m dqn_zoo.{algorithm}.run_atari --environment_name {environment} "
             f"--shaping_function_type {penalty} "
-            f"--results_csv_path $RESULTS_FOLDER/{algorithm}_{environment}_{penalty}.csv "
-            f"--checkpoint_path $RESULTS_FOLDER/{algorithm}_{environment}_{penalty}.pkl"
+            f"--results_csv_path {results_folder}/{algorithm}_{environment}_{penalty}.csv "
+            f"--checkpoint_path {results_folder}/{algorithm}_{environment}_{penalty}.pkl"
             )
-        file.write(f"cp {save_path} $RESULTS_FOLDER/\n")
         file.write(f"{run_command}\n")
 
 
 INT_STR_MAPPING = {0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
 
 
-def create_flat_chain_script(script_name: str, num_repeats: int):
-    flat_chain_save_path = f"flat_chain_{script_name}"
+def create_flat_chain_script(results_folder: str, script_name: str, num_repeats: int):
+    flat_chain_save_path = os.path.join(results_folder, f"flat_chain_{script_name}")
     with open(flat_chain_save_path, "w") as file:
         file.write("#!/bin/bash\n")
         file.write(f"{INT_STR_MAPPING[0]}=$(qsub {script_name})\n")
@@ -118,6 +118,10 @@ if __name__ == "__main__":
     else:
         modules = []
 
+    raw_datetime = datetime.datetime.fromtimestamp(time.time())
+    timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+    results_folder = os.path.join("results", timestamp)
+
     create_job_script(
         run_command=args.run_command,
         algorithm=args.algorithm,
@@ -132,8 +136,9 @@ if __name__ == "__main__":
         # error_path=args.error_path,
         # output_path=args.output_path,
         modules=modules,
+        results_folder=results_folder,
         walltime=f"{str(args.num_hours)}:0:0",
     )
 
     if args.flat_chain is not None:
-        create_flat_chain_script(script_name=args.save_path, num_repeats=args.flat_chain)
+        create_flat_chain_script(results_folder=results_folder, script_name=args.save_path, num_repeats=args.flat_chain)
