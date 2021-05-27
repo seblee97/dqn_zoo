@@ -125,7 +125,7 @@ if __name__ == "__main__":
     timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
 
     cwd = os.getcwd()
-    results_folder = os.path.join(cwd, "results", timestamp
+    results_folder = os.path.join(cwd, "results", timestamp)
 
     os.makedirs(results_folder, exist_ok=True)
 
