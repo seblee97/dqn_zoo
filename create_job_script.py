@@ -103,7 +103,7 @@ INT_STR_MAPPING = {0: "zero", 1: "one", 2: "two", 3: "three", 4: "four", 5: "fiv
 
 
 def create_flat_chain_script(results_folder: str, script_name: str, num_repeats: int):
-    full_script_name = os.path.join(results_folder, save_path)
+    full_script_name = os.path.join(results_folder, script_name)
     flat_chain_save_path = os.path.join(results_folder, f"flat_chain_{script_name}")
     with open(flat_chain_save_path, "w") as file:
         file.write("#!/bin/bash\n")
