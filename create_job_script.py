@@ -88,6 +88,7 @@ def create_job_script(
             f"--results_csv_path $RESULTS_FOLDER/{algorithm}_{environment}_{penalty}.csv "
             f"--checkpoint_path $RESULTS_FOLDER/{algorithm}_{environment}_{penalty}.pkl"
             )
+        file.write(f"cp {save_path} $RESULTS_FOLDER/\n")
         file.write(f"{run_command}\n")
 
 
