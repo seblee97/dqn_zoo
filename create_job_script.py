@@ -123,8 +123,8 @@ if __name__ == "__main__":
     timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
     results_folder = os.path.join("results", timestamp)
 
-    os.makedir("results", exist_ok=True)
-    os.makedir(results_folder, exist_ok=True)
+    os.mkdir("results", exist_ok=True)
+    os.mkdir(results_folder, exist_ok=True)
 
     create_job_script(
         run_command=args.run_command,
