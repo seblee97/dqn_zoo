@@ -66,8 +66,9 @@ def create_job_script(
             resource_specification += f":ngpus={num_gpus}:gpu_type={gpu_type}"
         file.write(f"{resource_specification}\n")
         file.write(f"#PBS -lwalltime={walltime}\n")
+        file.write("cd $PBS_O_WORKDIR\n")
         file.write("TIMESTAMP=$(date '+%Y_%m_%d_%H_%M_%S')\n")
-        file.write("RESULTS_FOLDER='results/$TIMESTAMP'\n")
+        file.write("RESULTS_FOLDER=results/$TIMESTAMP\n")
         # output/error file paths
         file.write(f"#PBS -e $RESULTS_FOLDER/error.txt\n")
         file.write(f"#PBS -o $RESULTS_FOLDER/output.txt\n")
@@ -78,8 +79,11 @@ def create_job_script(
             file.write(f"module load {module}\n")        	
         file.write(f"source activate {conda_env_name}\n")
         # change to dir where job was submitted from
-        file.write("cd $PBS_O_WORKDIR\n")
+        file.write("if [ -d results ]\n")
+        file.write("then\n")
         file.write("mkdir results\n")
+        file.write("if [ -d results/$TIMESTAMP ]\n")
+        file.write("then\n")
         file.write("mkdir results/$TIMESTAMP\n")
         # job script
         run_command = run_command or (
