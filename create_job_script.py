@@ -1,14 +1,17 @@
 import argparse
 
-from typing import List
+from typing import List, Union
 
 
 arg_parser = argparse.ArgumentParser()
 
 
 arg_parser.add_argument(
-    "--run_command", type=str, help="python command (or other) to run in cluster."
+    "--run_command", type=str, help="python command (or other) to run in cluster.", default=None
 )
+arg_parser.add_argument("--algorithm", type=str, help="name of algorithm to run", default="bootstrapped_dqn")
+arg_parser.add_argument("--environment", type=str, help="name of atari env", default="pong")
+arg_parser.add_argument("--penalty_type", type=str, help="name of penalty type", default="no_penalty")
 arg_parser.add_argument("--save_path", type=str, help="path to save job script.")
 arg_parser.add_argument("--num_cpus", type=int, help="number of CPUs to use for job.")
 arg_parser.add_argument(
@@ -17,9 +20,11 @@ arg_parser.add_argument(
 arg_parser.add_argument("--memory", type=int, help="memory per node.")
 arg_parser.add_argument("--num_gpus", type=int, help="number of GPUs to use for job.")
 arg_parser.add_argument("--gpu_type", type=str, help="type of GPU to use for job.")
-arg_parser.add_argument("--error_path", type=str, help="path of error file for job.")
-arg_parser.add_argument("--output_path", type=str, help="path of output file for job.")
+# arg_parser.add_argument("--error_path", type=str, help="path of error file for job.")
+# arg_parser.add_argument("--output_path", type=str, help="path of output file for job.")
 arg_parser.add_argument("--modules", type=str, help="list of modules to load.", default=None)
+arg_parser.add_argument("--num_hours", type=int, help="number of hours for runtime.", default=24)
+
 
 arg_parser.add_argument(
     "--flat_chain", 
@@ -30,15 +35,18 @@ arg_parser.add_argument(
 
 
 def create_job_script(
-    run_command: str,
+    run_command: Union[None, str],
+    algorithm: Union[None, str],
+    environment: Union[None, str],
+    penalty: Union[None, str],
     save_path: str,
     num_cpus: int,
     conda_env_name: str,
     memory: int,
     num_gpus: int,
     gpu_type: str,
-    error_path: str,
-    output_path: str,
+    # error_path: str,
+    # output_path: str,
     modules: List[str],
     walltime: str = "24:0:0",
 ) -> None:
@@ -53,14 +61,16 @@ def create_job_script(
             walltime: time to give job--1 day by default
     """
     with open(save_path, "w") as file:
+        file.write("TIMESTAMP=$(date '+%Y_%m_%d_%H_%M_%S'\n")
+        file.write("RESULTS_FOLDER='results/$TIMESTAMP'\n")
         resource_specification = f"#PBS -lselect=1:ncpus={num_cpus}:mem={memory}gb"
         if num_gpus:
             resource_specification += f":ngpus={num_gpus}:gpu_type={gpu_type}"
         file.write(f"{resource_specification}\n")
         file.write(f"#PBS -lwalltime={walltime}\n")
         # output/error file paths
-        file.write(f"#PBS -e {error_path}\n")
-        file.write(f"#PBS -o {output_path}\n")
+        file.write(f"#PBS -e $RESULTS_FOLDER/error.txt\n")
+        file.write(f"#PBS -o $RESULTS_FOLDER/output.txt\n")
         # initialise conda env
         file.write("module load anaconda3/personal\n")
         # load other relevant modules, e.g. cuda
@@ -70,6 +80,12 @@ def create_job_script(
         # change to dir where job was submitted from
         file.write("cd $PBS_O_WORKDIR\n")
         # job script
+        run_command = run_command or (
+            f"python -m dqn_zoo.{algorithm}.run_atari --environment_name {environment} "
+            f"--shaping_function_type {penalty} "
+            f"--results_csv_path $RESULTS_FOLDER/{algorithm}_{environment}_{penalty}.csv"
+            f"--checkpoint_path $RESULTS_FOLDER/{algorithm}_{environment}_{penalty}.pkl"
+            )
         file.write(f"{run_command}\n")
 
 
@@ -97,15 +113,19 @@ if __name__ == "__main__":
 
     create_job_script(
         run_command=args.run_command,
+        algorithm=args.algorithm,
+        environment=args.environment,
+        penalty=args.penalty_type,
         save_path=args.save_path,
         num_cpus=args.num_cpus,
         conda_env_name=args.conda_env_name,
         memory=args.memory,
         num_gpus=args.num_gpus,
         gpu_type=args.gpu_type,
-        error_path=args.error_path,
-        output_path=args.output_path,
-        modules=modules
+        # error_path=args.error_path,
+        # output_path=args.output_path,
+        modules=modules,
+        walltime=f"{args.num_hours}:0:0",
     )
 
     if args.flat_chain is not None:
