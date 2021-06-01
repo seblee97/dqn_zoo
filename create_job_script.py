@@ -98,7 +98,7 @@ def create_job_script(
         file.write(f"cd {source_code_dir}\n")
         run_command = run_command or (
             f"python -m dqn_zoo.{algorithm}.run_atari --environment_name {environment} "
-            f"--shaping_function_type {penalty} --shaping_multiplicative_factor {penalty_strength}"
+            f"--shaping_function_type {penalty} --shaping_multiplicative_factor {penalty_strength} "
             f"--results_csv_path {results_folder}/{algorithm}_{environment}_{penalty}_{penalty_strength}.csv "
             f"--checkpoint_path {results_folder}/{algorithm}_{environment}_{penalty}_{penalty_strength}.pkl"
             )
