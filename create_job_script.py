@@ -16,6 +16,7 @@ arg_parser.add_argument(
 arg_parser.add_argument("--algorithm", type=str, help="name of algorithm to run", default="bootstrapped_dqn")
 arg_parser.add_argument("--environment", type=str, help="name of atari env", default="pong")
 arg_parser.add_argument("--penalty_type", type=str, help="name of penalty type", default="no_penalty")
+arg_parser.add_argument("--penalty_strength", type=float, help="strength of penalty", default=-0.05)
 arg_parser.add_argument("--save_path", type=str, help="path to save job script.")
 arg_parser.add_argument("--num_cpus", type=int, help="number of CPUs to use for job.")
 arg_parser.add_argument(
@@ -46,6 +47,7 @@ def create_job_script(
     algorithm: Union[None, str],
     environment: Union[None, str],
     penalty: Union[None, str],
+    penalty_strength: float,
     save_path: str,
     num_cpus: int,
     conda_env_name: str,
@@ -96,9 +98,9 @@ def create_job_script(
         file.write(f"cd {source_code_dir}\n")
         run_command = run_command or (
             f"python -m dqn_zoo.{algorithm}.run_atari --environment_name {environment} "
-            f"--shaping_function_type {penalty} "
-            f"--results_csv_path {results_folder}/{algorithm}_{environment}_{penalty}.csv "
-            f"--checkpoint_path {results_folder}/{algorithm}_{environment}_{penalty}.pkl"
+            f"--shaping_function_type {penalty} --shaping_multiplicative_factor {penalty_strength}"
+            f"--results_csv_path {results_folder}/{algorithm}_{environment}_{penalty}_{penalty_strength}.csv "
+            f"--checkpoint_path {results_folder}/{algorithm}_{environment}_{penalty}_{penalty_strength}.pkl"
             )
         file.write(f"{run_command}\n")
 
@@ -130,7 +132,7 @@ if __name__ == "__main__":
     timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
 
     if args.exp_name is not None:
-        subfolder = os.path.join(args.exp_name, f"{args.algorithm}_{args.environment}_{args.penalty_type}")
+        subfolder = os.path.join(args.exp_name, f"{args.algorithm}_{args.environment}_{args.penalty_type}_{penalty_strength}")
     else:
         subfolder = timestamp
 
@@ -144,6 +146,7 @@ if __name__ == "__main__":
         algorithm=args.algorithm,
         environment=args.environment,
         penalty=args.penalty_type,
+        penalty_strength=args.penalty_strength,
         save_path=args.save_path,
         num_cpus=args.num_cpus,
         conda_env_name=args.conda_env_name,
