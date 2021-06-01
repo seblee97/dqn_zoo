@@ -113,7 +113,7 @@ def create_flat_chain_script(results_folder: str, script_name: str, num_repeats:
         file.write(f"{INT_STR_MAPPING[0]}=$(qsub {full_script_name})\n")
         file.write(f"echo ${INT_STR_MAPPING[0]}\n")
         for i in range(1, num_repeats):
-            file.write(f"{INT_STR_MAPPING[i]}=$(qsub -W depend=afterok:${INT_STR_MAPPING[i-1]} {full_script_name})\n")
+            file.write(f"{INT_STR_MAPPING[i]}=$(qsub -W depend=afternotok:${INT_STR_MAPPING[i-1]} {full_script_name})\n")
             file.write(f"echo ${INT_STR_MAPPING[i]}\n")
 
 
