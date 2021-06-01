@@ -28,6 +28,7 @@ arg_parser.add_argument("--gpu_type", type=str, help="type of GPU to use for job
 # arg_parser.add_argument("--output_path", type=str, help="path of output file for job.")
 arg_parser.add_argument("--modules", type=str, help="list of modules to load.", default=None)
 arg_parser.add_argument("--num_hours", type=int, help="number of hours for runtime.", default=24)
+arg_parser.add_argument("--exp_name", type=str, help="name of folder under which to store experiment results", default=None)
 
 
 arg_parser.add_argument(
@@ -128,8 +129,13 @@ if __name__ == "__main__":
     raw_datetime = datetime.datetime.fromtimestamp(time.time())
     timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
 
+    if args.exp_name is not None:
+        subfolder = os.path.join(args.exp_name, f"{args.algorithm}_{args.environment}_{args.penalty_type}")
+    else:
+        subfolder = timestamp
+
     cwd = os.getcwd()
-    results_folder = os.path.join(cwd, "results", timestamp)
+    results_folder = os.path.join(cwd, "results", subfolder)
 
     os.makedirs(results_folder, exist_ok=True)
 
