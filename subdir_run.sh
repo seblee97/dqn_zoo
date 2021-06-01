@@ -1,4 +1,5 @@
-for exp_folder in $ls
+for exp_folder in *
 do
-	qsub $exp_folder/job_script
+	if exp_folder != "subdir_run.sh"
+		qsub $exp_folder/job_script
 done
