@@ -31,7 +31,7 @@ flags.DEFINE_integer('environment_width', 84, '')
 flags.DEFINE_bool('use_gym', False, '')
 flags.DEFINE_integer('replay_capacity', int(1e6), '')
 flags.DEFINE_bool('compress_state', True, '')
-flags.DEFINE_float('min_replay_capacity_fraction', 0.05, '')
+flags.DEFINE_float('min_replay_capacity_fraction', 0.001, '')
 flags.DEFINE_string('shaping_function_type', 'no_penalty', '')
 flags.DEFINE_float('shaping_multiplicative_factor', -0.05, '')
 flags.DEFINE_integer('num_heads', 10, '')
@@ -52,8 +52,8 @@ flags.DEFINE_float('additional_discount', 0.99, '')
 flags.DEFINE_float('max_abs_reward', 1., '')
 flags.DEFINE_integer('seed', 1, '')  # GPU may introduce nondeterminism.
 flags.DEFINE_integer('num_iterations', 200, '')
-flags.DEFINE_integer('num_train_frames', int(1e6), '')  # Per iteration.
-flags.DEFINE_integer('num_eval_frames', int(5e5), '')  # Per iteration.
+flags.DEFINE_integer('num_train_frames', int(1e4), '')  # Per iteration.
+flags.DEFINE_integer('num_eval_frames', int(5e3), '')  # Per iteration.
 flags.DEFINE_integer('learn_period', 16, '')
 flags.DEFINE_string('results_csv_path', '/tmp/results.csv', '')
 flags.DEFINE_string('checkpoint_path', None, '')
@@ -243,6 +243,8 @@ def main(argv):
         ('normalized_return', human_normalized_score, '%.3f'),
         ('capped_normalized_return', capped_human_normalized_score, '%.3f'),
         ('human_gap', 1. - capped_human_normalized_score, '%.3f'),
+        ('train_loss', train_stats['train_loss'], '% 2.2f'),
+        ('shaped_reward', train_stats['train_loss'], '% 2.2f')
     ]
     log_output_str = ', '.join(('%s: ' + f) % (n, v) for n, v, f in log_output)
     logging.info(log_output_str)
