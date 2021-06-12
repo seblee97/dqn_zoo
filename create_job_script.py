@@ -134,7 +134,7 @@ if __name__ == "__main__":
     timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
 
     if args.exp_name is not None:
-        subfolder = os.path.join(args.exp_name, f"{args.algorithm}_{args.environment}_{args.penalty_type}_{args.penalty_strength}")
+        subfolder = os.path.join(args.exp_name, f"{args.algorithm}_{args.environment}_{args.penalty_type}_{args.penalty_strength}_{args.seed}")
     else:
         subfolder = timestamp
 
