@@ -17,6 +17,7 @@ arg_parser.add_argument("--algorithm", type=str, help="name of algorithm to run"
 arg_parser.add_argument("--environment", type=str, help="name of atari env", default="pong")
 arg_parser.add_argument("--penalty_type", type=str, help="name of penalty type", default="no_penalty")
 arg_parser.add_argument("--penalty_strength", type=float, help="strength of penalty", default=-0.05)
+arg_parser.add_argument("--seed", type=int, help="random seed", default=1)
 arg_parser.add_argument("--save_path", type=str, help="path to save job script.")
 arg_parser.add_argument("--num_cpus", type=int, help="number of CPUs to use for job.")
 arg_parser.add_argument(
@@ -48,6 +49,7 @@ def create_job_script(
     environment: Union[None, str],
     penalty: Union[None, str],
     penalty_strength: float,
+    seed: int,
     save_path: str,
     num_cpus: int,
     conda_env_name: str,
@@ -98,9 +100,9 @@ def create_job_script(
         file.write(f"cd {source_code_dir}\n")
         run_command = run_command or (
             f"python -m dqn_zoo.{algorithm}.run_atari --environment_name {environment} "
-            f"--shaping_function_type {penalty} --shaping_multiplicative_factor {penalty_strength} "
-            f"--results_csv_path {results_folder}/{algorithm}_{environment}_{penalty}_{penalty_strength}.csv "
-            f"--checkpoint_path {results_folder}/{algorithm}_{environment}_{penalty}_{penalty_strength}.pkl"
+            f"--shaping_function_type {penalty} --shaping_multiplicative_factor {penalty_strength} --seed {seed} "
+            f"--results_csv_path {results_folder}/{algorithm}_{environment}_{penalty}_{penalty_strength}_{seed}.csv "
+            f"--checkpoint_path {results_folder}/{algorithm}_{environment}_{penalty}_{penalty_strength}_{seed}.pkl"
             )
         file.write(f"{run_command}\n")
 
@@ -147,6 +149,7 @@ if __name__ == "__main__":
         environment=args.environment,
         penalty=args.penalty_type,
         penalty_strength=args.penalty_strength,
+        seed=args.seed,
         save_path=args.save_path,
         num_cpus=args.num_cpus,
         conda_env_name=args.conda_env_name,
