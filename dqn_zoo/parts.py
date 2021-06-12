@@ -72,8 +72,8 @@ def run_loop(
     timestep_t = environment.reset()  # timestep_0.
 
     while True:  # For each step in the current episode.
-      a_t = agent.step(timestep_t)
-      yield timestep_t, a_t
+      a_t, loss, shaped_rewards, penalties = agent.step(timestep_t)
+      yield timestep_t, a_t, loss, shaped_rewards, penalties
 
       # Update t after one environment step and agent step and relabel.
       t += 1
@@ -85,8 +85,8 @@ def run_loop(
         timestep_t = timestep_t._replace(step_type=dm_env.StepType.LAST)
 
       if timestep_t.last():
-        unused_a_t = agent.step(timestep_t)  # Extra agent step, action ignored.
-        yield timestep_t, None
+        unused_a_t, loss, shaped_rewards, penalties = agent.step(timestep_t)  # Extra agent step, action ignored.
+        yield timestep_t, None, loss, shaped_rewards, penalties
         break
 
 
@@ -100,11 +100,11 @@ def generate_statistics(
   episode_tracker.reset()
   step_rate_tracker.reset()
 
-  for timestep_t, unused_a_t in timestep_action_sequence:
+  for timestep_t, unused_a_t, loss, shaped_reward, penalties in timestep_action_sequence:
     if timestep_t is None:
       continue
     step_rate_tracker.step(timestep_t)
-    episode_tracker.step(timestep_t)
+    episode_tracker.step(timestep_t, loss=loss, shaped_reward=shaped_reward, penalties=penalties)
 
   episode_stats = episode_tracker.get()
   step_rate_stats = step_rate_tracker.get()
@@ -121,9 +121,13 @@ class EpisodeTracker:
     self._episode_returns = None
     self._current_episode_rewards = None
     self._current_episode_step = None
+    self._current_episode_shaped_rewards = None
+    self._current_episode_loss = None
+    self._current_episode_penalties = None
 
-  def step(self, timestep: dm_env.TimeStep) -> None:
+  def step(self, timestep: dm_env.TimeStep, loss, shaped_reward, penalties) -> None:
     """Accumulates statistics from timestep."""
+
     if timestep.first():
       if self._current_episode_rewards:
         raise ValueError('Current episode reward list should be empty.')
@@ -133,12 +137,29 @@ class EpisodeTracker:
       # First reward is invalid, all other rewards are appended.
       self._current_episode_rewards.append(timestep.reward)
 
+    if shaped_reward is not None:
+      if isinstance(shaped_reward, list):
+        self._current_episode_shaped_rewards.extend(shaped_reward)
+      else:
+        self._current_episode_shaped_rewards.append(shaped_reward)
+    if loss is not None:
+      self._current_episode_loss += loss
+
+    if penalties is not None:
+      if isinstance(penalties, list):
+        self._current_episode_penalties.extend(penalties)
+      else:
+        self._current_episode_penalties.append(penalties)
+
     self._num_steps_since_reset += 1
     self._current_episode_step += 1
 
     if timestep.last():
       self._episode_returns.append(sum(self._current_episode_rewards))
       self._current_episode_rewards = []
+      self._current_episode_shaped_rewards = []
+      self._current_episode_penalties = []
+      self._current_episode_loss = 0
       self._num_steps_over_episodes += self._current_episode_step
       self._current_episode_step = 0
 
@@ -147,6 +168,9 @@ class EpisodeTracker:
     self._num_steps_since_reset = 0
     self._num_steps_over_episodes = 0
     self._episode_returns = []
+    self._current_episode_shaped_rewards = []
+    self._current_episode_penalties = []
+    self._current_episode_loss = 0
     self._current_episode_step = 0
     self._current_episode_rewards = []
 
@@ -173,9 +197,21 @@ class EpisodeTracker:
         current_episode_return = np.nan
       episode_return = current_episode_return
 
+    if [i for i in self._current_episode_shaped_rewards if i]:
+      mean_episode_shaped_reward = np.array(self._current_episode_shaped_rewards).mean()
+      mean_episode_penalties = np.array(self._current_episode_penalties).mean()
+      current_episode_loss = self._current_episode_loss
+    else:
+      mean_episode_shaped_reward = np.nan
+      mean_episode_penalties = np.nan
+      current_episode_loss = np.nan
+
     return {
         'mean_episode_return': mean_episode_return,
         'current_episode_return': current_episode_return,
+        'shaped_reward': mean_episode_shaped_reward,
+        'penalties': mean_episode_penalties,
+        'train_loss': current_episode_loss,
         'episode_return': episode_return,
         'num_episodes': len(self._episode_returns),
         'num_steps_over_episodes': self._num_steps_over_episodes,
@@ -245,13 +281,13 @@ class EpsilonGreedyActor:
     timestep = self._preprocessor(timestep)
 
     if timestep is None:  # Repeat action.
-      return self._action
+      return self._action, None, None, None
 
     s_t = timestep.observation
     self._rng_key, a_t = self._select_action(self._rng_key, self.network_params,
                                              s_t)
     self._action = Action(jax.device_get(a_t))
-    return self._action
+    return self._action, None, None, None
 
   def reset(self) -> None:
     """Resets the agent's episodic state such as frame stack and action repeat.
