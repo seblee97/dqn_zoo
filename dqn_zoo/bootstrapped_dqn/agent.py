@@ -73,8 +73,9 @@ class BootstrappedDqn:
       flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
       # compute shaping function F(s, a, s')
       shaped_rewards = shaping_function(q_target_t, transitions, apply_keys[1])
+      penalties = shaped_rewards - transitions.r_t
 
-      return flattened_q_target, shaped_rewards
+      return flattened_q_target, shaped_rewards, penalties
 
     def loss_fn(online_params, shaped_rewards, flattened_q_target, transitions, rng_key):
       """Calculates loss given network parameters and transitions."""
@@ -118,13 +119,13 @@ class BootstrappedDqn:
     def update(rng_key, opt_state, online_params, target_params, transitions):
       """Computes learning update from batch of replay transitions."""
       _, *update_keys = jax.random.split(rng_key, 3)
-      flattened_q_target, shaped_rewards = shaping_output(target_params, transitions, update_keys[0])
+      flattened_q_target, shaped_rewards, penalties = shaping_output(target_params, transitions, update_keys[0])
       loss_values, d_loss_d_params = jax.value_and_grad(loss_fn)(online_params, shaped_rewards, flattened_q_target,
                                           transitions, update_keys[1])
 
       updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
       new_online_params = optax.apply_updates(online_params, updates)
-      return rng_key, new_opt_state, new_online_params, loss_values, shaped_rewards
+      return rng_key, new_opt_state, new_online_params, loss_values, shaped_rewards, penalties
 
     self._update = jax.jit(update)
 
@@ -167,18 +168,19 @@ class BootstrappedDqn:
         self._replay.add(masked_transition)
 
     if self._replay.size < self._min_replay_capacity:
-      return action, None, None
+      return action, None, None, None
 
     if self._frame_t % self._learn_period == 0:
-      loss, shaped_rewards = self._learn()
+      loss, shaped_rewards, penalties = self._learn()
     else:
       loss = None
       shaped_rewards = None
+      penalties = None
 
     if self._frame_t % self._target_network_update_period == 0:
       self._target_params = self._online_params
 
-    return action, loss, shaped_rewards
+    return action, loss, shaped_rewards, penalties
 
   def reset(self) -> None:
     """Resets the agent's episodic state such as frame stack and action repeat.
@@ -200,14 +202,14 @@ class BootstrappedDqn:
     """Samples a batch of transitions from replay and learns from it."""
     logging.log_first_n(logging.INFO, 'Begin learning', 1)
     transitions = self._replay.sample(self._batch_size)
-    self._rng_key, self._opt_state, self._online_params, loss_values, shaped_rewards = self._update(
+    self._rng_key, self._opt_state, self._online_params, loss_values, shaped_rewards, penalties = self._update(
         self._rng_key,
         self._opt_state,
         self._online_params,
         self._target_params,
         transitions,
     )
-    return loss_values, shaped_rewards
+    return loss_values.item(), shaped_rewards.tolist(), penalties.tolist()
 
   @property
   def online_params(self) -> parts.NetworkParams:
