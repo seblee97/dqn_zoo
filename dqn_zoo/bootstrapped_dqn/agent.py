@@ -62,6 +62,8 @@ class BootstrappedDqn:
     self._action = None
     self._frame_t = -1  # Current frame index.
 
+    LOG_EPSILON = 0.0001
+
     # Define jitted loss, update, and policy functions here instead of as
     # class methods, to emphasize that these are meant to be pure functions
     # and should not access the agent object's state via `self`.
@@ -75,7 +77,7 @@ class BootstrappedDqn:
       shaped_rewards = shaping_function(q_target_t, transitions, apply_keys[1])
       penalties = shaped_rewards - transitions.r_t
 
-      return flattened_q_target, shaped_rewards, penalties
+      return q_target_t, flattened_q_target, shaped_rewards, penalties
 
     def loss_fn(online_params, shaped_rewards, flattened_q_target, transitions, rng_key):
       """Calculates loss given network parameters and transitions."""
@@ -119,9 +121,16 @@ class BootstrappedDqn:
     def update(rng_key, opt_state, online_params, target_params, transitions):
       """Computes learning update from batch of replay transitions."""
       _, *update_keys = jax.random.split(rng_key, 3)
-      flattened_q_target, shaped_rewards, penalties = shaping_output(target_params, transitions, update_keys[0])
+      q_target_t, flattened_q_target, shaped_rewards, penalties = shaping_output(target_params, transitions, update_keys[0])
       loss_values, d_loss_d_params = jax.value_and_grad(loss_fn)(online_params, shaped_rewards, flattened_q_target,
                                           transitions, update_keys[1])
+
+      # compute expected uncertainty
+      # use gradient transformation wrapper from optax
+      max_indices = jnp.argmax(q_target_t, axis=-1)
+      max_index_probabilities = jnp.array([jnp.bincount(mi, minlength=6, length=6) / len(max_indices) for mi in max_indices])
+      log_max_index_probabilities = jnp.log(max_index_probabilities + LOG_EPSILON)
+      expected_unc = jnp.sum((max_index_probabilities + LOG_EPSILON) * log_max_index_probabilities, axis=1)
 
       updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
       new_online_params = optax.apply_updates(online_params, updates)
@@ -133,8 +142,18 @@ class BootstrappedDqn:
       """Samples action from eps-greedy policy wrt Q-values at given state."""
       rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
 
-      q_t = network.apply(network_params, apply_key, s_t[None, ...]).q_values[0]
-      a_t = rlax.epsilon_greedy().sample(policy_key, q_t, exploration_epsilon)
+      network_forward = network.apply(network_params, apply_key, s_t[None, ...])
+      q_t = network_forward.q_values[0]
+
+      # modulate action selection epsilon with uncertainty
+      value_distribution = network_forward.multi_head_output[0]
+      max_indices = jnp.argmax(value_distribution, axis=-1)
+      max_index_probabilities = jnp.bincount(
+        max_indices, minlength=len(q_t), length=len(q_t)) / len(max_indices
+        )
+      entropy = -jnp.sum((max_index_probabilities + LOG_EPSILON) * jnp.log(max_index_probabilities + LOG_EPSILON))
+
+      a_t = rlax.epsilon_greedy().sample(policy_key, q_t, entropy)
       return rng_key, a_t
 
     self._select_action = jax.jit(select_action)
