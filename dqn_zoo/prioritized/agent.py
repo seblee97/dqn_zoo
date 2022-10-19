@@ -19,6 +19,8 @@
 from typing import Any, Callable, Mapping, Text
 
 from absl import logging
+import chex
+import distrax
 import dm_env
 import jax
 import jax.numpy as jnp
@@ -34,7 +36,7 @@ from dqn_zoo import replay as replay_lib
 _batch_double_q_learning = jax.vmap(rlax.double_q_learning)
 
 
-class PrioritizedDqn:
+class PrioritizedDqn(parts.Agent):
   """Prioritized Experience Replay (proportional variant) DQN agent."""
 
   def __init__(
@@ -72,6 +74,7 @@ class PrioritizedDqn:
     # Other agent state: last action, frame count, etc.
     self._action = None
     self._frame_t = -1  # Current frame index.
+    self._statistics = {'state_value': np.nan}
     self._max_seen_priority = 1.
 
     # Define jitted loss, update, and policy functions here instead of as
@@ -98,7 +101,7 @@ class PrioritizedDqn:
       td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
                                      grad_error_bound)
       losses = rlax.l2_loss(td_errors)
-      assert losses.shape == (self._batch_size,) == weights.shape
+      chex.assert_shape((losses, weights), (self._batch_size,))
       # This is not the same as using a huber loss and multiplying by weights.
       loss = jnp.mean(losses * weights)
       return loss, td_errors
@@ -120,8 +123,10 @@ class PrioritizedDqn:
       """Samples action from eps-greedy policy wrt Q-values at given state."""
       rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
       q_t = network.apply(network_params, apply_key, s_t[None, ...]).q_values[0]
-      a_t = rlax.epsilon_greedy().sample(policy_key, q_t, exploration_epsilon)
-      return rng_key, a_t
+      a_t = distrax.EpsilonGreedy(q_t,
+                                  exploration_epsilon).sample(seed=policy_key)
+      v_t = jnp.max(q_t, axis=-1)
+      return rng_key, a_t, v_t
 
     self._select_action = jax.jit(select_action)
 
@@ -162,9 +167,12 @@ class PrioritizedDqn:
   def _act(self, timestep) -> parts.Action:
     """Selects action given timestep, according to epsilon-greedy policy."""
     s_t = timestep.observation
-    self._rng_key, a_t = self._select_action(self._rng_key, self._online_params,
-                                             s_t, self.exploration_epsilon)
-    return parts.Action(jax.device_get(a_t))
+    self._rng_key, a_t, v_t = self._select_action(self._rng_key,
+                                                  self._online_params, s_t,
+                                                  self.exploration_epsilon)
+    a_t, v_t = jax.device_get((a_t, v_t))
+    self._statistics['state_value'] = v_t
+    return parts.Action(a_t)
 
   def _learn(self) -> None:
     """Samples a batch of transitions from replay and learns from it."""
@@ -179,7 +187,7 @@ class PrioritizedDqn:
             transitions,
             weights,
         ))
-    assert weights.shape == td_errors.shape
+    chex.assert_equal_shape((weights, td_errors))
     priorities = jnp.abs(td_errors)
     priorities = jax.device_get(priorities)
     max_priority = priorities.max()
@@ -190,6 +198,14 @@ class PrioritizedDqn:
   def online_params(self) -> parts.NetworkParams:
     """Returns current parameters of Q-network."""
     return self._online_params
+
+  @property
+  def statistics(self) -> Mapping[Text, float]:
+    """Returns current agent statistics as a dictionary."""
+    # Check for DeviceArrays in values as this can be very slow.
+    assert all(
+        not isinstance(x, jnp.DeviceArray) for x in self._statistics.values())
+    return self._statistics
 
   @property
   def exploration_epsilon(self) -> float:

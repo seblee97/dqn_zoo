@@ -19,9 +19,12 @@
 from typing import Any, Callable, Mapping, Text
 
 from absl import logging
+import chex
+import distrax
 import dm_env
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 import rlax
 
@@ -34,7 +37,7 @@ _batch_quantile_q_learning = jax.vmap(
     rlax.quantile_q_learning, in_axes=(0, None, 0, 0, 0, 0, 0, None))
 
 
-class QrDqn:
+class QrDqn(parts.Agent):
   """Quantile Regression DQN agent."""
 
   def __init__(
@@ -73,6 +76,7 @@ class QrDqn:
     # Other agent state: last action, frame count, etc.
     self._action = None
     self._frame_t = -1  # Current frame index.
+    self._statistics = {'state_value': np.nan}
 
     # Define jitted loss, update, and policy functions here instead of as
     # class methods, to emphasize that these are meant to be pure functions
@@ -96,7 +100,7 @@ class QrDqn:
           dist_q_target_t,
           huber_param,
       )
-      assert losses.shape == (self._batch_size,)
+      chex.assert_shape(losses, (self._batch_size,))
       loss = jnp.mean(losses)
       return loss
 
@@ -115,8 +119,10 @@ class QrDqn:
       """Samples action from eps-greedy policy wrt Q-values at given state."""
       rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
       q_t = network.apply(network_params, apply_key, s_t[None, ...]).q_values[0]
-      a_t = rlax.epsilon_greedy().sample(policy_key, q_t, exploration_epsilon)
-      return rng_key, a_t
+      a_t = distrax.EpsilonGreedy(q_t,
+                                  exploration_epsilon).sample(seed=policy_key)
+      v_t = jnp.max(q_t, axis=-1)
+      return rng_key, a_t, v_t
 
     self._select_action = jax.jit(select_action)
 
@@ -157,9 +163,12 @@ class QrDqn:
   def _act(self, timestep) -> parts.Action:
     """Selects action given timestep, according to epsilon-greedy policy."""
     s_t = timestep.observation
-    self._rng_key, a_t = self._select_action(self._rng_key, self._online_params,
-                                             s_t, self.exploration_epsilon)
-    return parts.Action(jax.device_get(a_t))
+    self._rng_key, a_t, v_t = self._select_action(self._rng_key,
+                                                  self._online_params, s_t,
+                                                  self.exploration_epsilon)
+    a_t, v_t = jax.device_get((a_t, v_t))
+    self._statistics['state_value'] = v_t
+    return parts.Action(a_t)
 
   def _learn(self) -> None:
     """Samples a batch of transitions from replay and learns from it."""
@@ -177,6 +186,14 @@ class QrDqn:
   def online_params(self) -> parts.NetworkParams:
     """Returns current parameters of Q-network."""
     return self._online_params
+
+  @property
+  def statistics(self) -> Mapping[Text, float]:
+    """Returns current agent statistics as a dictionary."""
+    # Check for DeviceArrays in values as this can be very slow.
+    assert all(
+        not isinstance(x, jnp.DeviceArray) for x in self._statistics.values())
+    return self._statistics
 
   @property
   def exploration_epsilon(self) -> float:

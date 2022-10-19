@@ -37,6 +37,7 @@ import typing
 from absl import app
 from absl import flags
 from absl import logging
+import chex
 import dm_env
 import haiku as hk
 import jax
@@ -58,7 +59,6 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('environment_name', 'pong', '')
 flags.DEFINE_integer('environment_height', 84, '')
 flags.DEFINE_integer('environment_width', 84, '')
-flags.DEFINE_bool('use_gym', False, '')
 flags.DEFINE_integer('replay_capacity', int(1e6), '')
 flags.DEFINE_bool('compress_state', True, '')
 flags.DEFINE_float('min_replay_capacity_fraction', 0.02, '')
@@ -97,7 +97,7 @@ def main(argv):
                jax.lib.xla_bridge.get_backend().platform)
   random_state = np.random.RandomState(FLAGS.seed)
   rng_key = jax.random.PRNGKey(
-      random_state.randint(-sys.maxsize - 1, sys.maxsize + 1))
+      random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64))
 
   if FLAGS.results_csv_path:
     writer = parts.CsvWriter(FLAGS.results_csv_path)
@@ -143,9 +143,9 @@ def main(argv):
   sample_processed_timestep = typing.cast(dm_env.TimeStep,
                                           sample_processed_timestep)
   sample_network_input = sample_processed_timestep.observation
-  assert sample_network_input.shape == (FLAGS.environment_height,
-                                        FLAGS.environment_width,
-                                        FLAGS.num_stacked_frames)
+  chex.assert_shape(sample_network_input,
+                    (FLAGS.environment_height, FLAGS.environment_width,
+                     FLAGS.num_stacked_frames))
 
   # Note the t in the replay is not exactly aligned with the agent t.
   importance_sampling_exponent_schedule = parts.LinearSchedule(
@@ -233,13 +233,15 @@ def main(argv):
     train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
     num_train_frames = 0 if state.iteration == 0 else FLAGS.num_train_frames
     train_seq_truncated = itertools.islice(train_seq, num_train_frames)
-    train_stats = parts.generate_statistics(train_seq_truncated)
+    train_trackers = parts.make_default_trackers(train_agent)
+    train_stats = parts.generate_statistics(train_trackers, train_seq_truncated)
 
     logging.info('Evaluation iteration %d.', state.iteration)
     eval_agent.network_params = train_agent.online_params
     eval_seq = parts.run_loop(eval_agent, env, FLAGS.max_frames_per_episode)
     eval_seq_truncated = itertools.islice(eval_seq, FLAGS.num_eval_frames)
-    eval_stats = parts.generate_statistics(eval_seq_truncated)
+    eval_trackers = parts.make_default_trackers(eval_agent)
+    eval_stats = parts.generate_statistics(eval_trackers, eval_seq_truncated)
 
     # Logging and checkpointing.
     human_normalized_score = atari_data.get_human_normalized_score(
@@ -254,6 +256,7 @@ def main(argv):
         ('train_num_episodes', train_stats['num_episodes'], '%3d'),
         ('eval_frame_rate', eval_stats['step_rate'], '%4.0f'),
         ('train_frame_rate', train_stats['step_rate'], '%4.0f'),
+        ('train_state_value', train_stats['state_value'], '%.3f'),
         ('importance_sampling_exponent',
          train_agent.importance_sampling_exponent, '%.3f'),
         ('max_seen_priority', train_agent.max_seen_priority, '%.3f'),

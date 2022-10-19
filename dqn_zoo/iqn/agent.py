@@ -19,9 +19,12 @@
 from typing import Any, Callable, Mapping, Text, Tuple
 
 from absl import logging
+import chex
+import distrax
 import dm_env
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 import rlax
 
@@ -45,7 +48,7 @@ def _sample_tau(
   return jax.random.uniform(rng_key, shape=shape)
 
 
-class IqnEpsilonGreedyActor:
+class IqnEpsilonGreedyActor(parts.Agent):
   """Agent that acts with a given set of IQN-network parameters and epsilon.
 
   Network parameters are set on the actor. The actor can be checkpointed for
@@ -71,7 +74,8 @@ class IqnEpsilonGreedyActor:
       tau_t = _sample_tau(tau_key, (1, tau_samples))
       q_t = network.apply(network_params, apply_key,
                           IqnInputs(s_t[None, ...], tau_t)).q_values[0]
-      a_t = rlax.epsilon_greedy().sample(policy_key, q_t, exploration_epsilon)
+      a_t = distrax.EpsilonGreedy(q_t,
+                                  exploration_epsilon).sample(seed=policy_key)
       return rng_key, a_t
 
     self._select_action = jax.jit(select_action)
@@ -110,8 +114,12 @@ class IqnEpsilonGreedyActor:
     self._rng_key = state['rng_key']
     self.network_params = state['network_params']
 
+  @property
+  def statistics(self) -> Mapping[Text, float]:
+    return {}
 
-class Iqn:
+
+class Iqn(parts.Agent):
   """Implicit Quantile Network agent."""
 
   def __init__(
@@ -153,6 +161,7 @@ class Iqn:
     # Other agent state: last action, frame count, etc.
     self._action = None
     self._frame_t = -1  # Current frame index.
+    self._statistics = {'state_value': np.nan}
 
     # Define jitted loss, update, and policy functions here instead of as
     # class methods, to emphasize that these are meant to be pure functions
@@ -187,7 +196,7 @@ class Iqn:
           dist_q_target_t,
           huber_param,
       )
-      assert losses.shape == (self._batch_size,)
+      chex.assert_shape(losses, (self._batch_size,))
       loss = jnp.mean(losses)
       return loss
 
@@ -208,8 +217,10 @@ class Iqn:
       tau_t = _sample_tau(sample_key, (1, tau_samples_policy))
       q_t = network.apply(network_params, apply_key,
                           IqnInputs(s_t[None, ...], tau_t)).q_values[0]
-      a_t = rlax.epsilon_greedy().sample(policy_key, q_t, exploration_epsilon)
-      return rng_key, a_t
+      a_t = distrax.EpsilonGreedy(q_t,
+                                  exploration_epsilon).sample(seed=policy_key)
+      v_t = jnp.max(q_t, axis=-1)
+      return rng_key, a_t, v_t
 
     self._select_action = jax.jit(select_action)
 
@@ -250,9 +261,12 @@ class Iqn:
   def _act(self, timestep) -> parts.Action:
     """Selects action given timestep, according to epsilon-greedy policy."""
     s_t = timestep.observation
-    self._rng_key, a_t = self._select_action(self._rng_key, self._online_params,
-                                             s_t, self.exploration_epsilon)
-    return parts.Action(jax.device_get(a_t))
+    self._rng_key, a_t, v_t = self._select_action(self._rng_key,
+                                                  self._online_params, s_t,
+                                                  self.exploration_epsilon)
+    a_t, v_t = jax.device_get((a_t, v_t))
+    self._statistics['state_value'] = v_t
+    return parts.Action(a_t)
 
   def _learn(self) -> None:
     """Samples a batch of transitions from replay and learns from it."""
@@ -270,6 +284,13 @@ class Iqn:
   def online_params(self) -> parts.NetworkParams:
     """Returns current parameters of Q-network."""
     return self._online_params
+
+  @property
+  def statistics(self) -> Mapping[Text, float]:
+    # Check for DeviceArrays in values as this can be very slow.
+    assert all(
+        not isinstance(x, jnp.DeviceArray) for x in self._statistics.values())
+    return self._statistics
 
   @property
   def exploration_epsilon(self) -> float:

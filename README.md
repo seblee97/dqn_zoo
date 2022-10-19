@@ -1,6 +1,6 @@
 # DQN Zoo
 
-_DQN Zoo_ is a collection of reference implementations of reinforcement learning
+*DQN Zoo* is a collection of reference implementations of reinforcement learning
 agents developed at DeepMind based on the
 [Deep Q-Network (DQN)](http://www.nature.com/articles/nature14236) agent.
 
@@ -31,7 +31,7 @@ Plot of median human-normalized score over all 57 Atari games for each agent:
 
 ## Quick start
 
-NOTE: Only Python 3.6 and above and Linux is supported.
+NOTE: Only Python 3.9 and above and Linux is supported.
 
 Follow these steps to quickly clone the DQN Zoo repository, install all required
 dependencies and start running DQN. Prerequisites for these steps are a NVIDIA
@@ -41,19 +41,28 @@ GPU with recent CUDA drivers.
 
 1.  Install [Docker](http://docs.docker.com/) version 19.03 or later (for the
     `--gpus` flag).
-1.  Install [NVIDIA Docker](http://github.com/NVIDIA/nvidia-docker).
+1.  Install [NVIDIA Container Toolkit](http://github.com/NVIDIA/nvidia-docker).
 1.  Enable
-    [sudoless docker](http://docs.docker.com/engine/install/linux-postinstall/).
+    [sudoless docker](http://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user).
+
 1.  Verify the previous steps were successful by running: \
-    `docker run --gpus all --rm nvidia/cuda:10.1-base nvidia-smi`
-1.  Download and run the script [`run.sh`](run.sh). This script will:
-    1.  Clone the DQN Zoo repository.
-    1.  Build a Docker image with all necessary dependencies and run unit tests.
-    1.  Start a short run of DQN on Pong in a GPU-accelerated container.
+    `docker run --gpus all --rm nvidia/cuda:11.1-base nvidia-smi`
+
+1.  Download the script [`run.sh`](run.sh). This automatically downloads the
+    Atari ROMs from http://www.atarimania.com. The ROMs are available here for
+    free but make sure the respective license covers your particular use case.
+
+Running this script will:
+
+```
+1.  Clone the DQN Zoo repository.
+1.  Build a Docker image with all necessary dependencies and run unit tests.
+1.  Start a short run of DQN on Pong in a GPU-accelerated container.
+```
 
 <!-- mdlint on -->
 
-NOTE: `run.sh`, `Dockerfile` and `requirements.txt` together provide a
+NOTE: `run.sh`, `Dockerfile` and `docker_requirements.txt` together provide a
 self-contained example of the dependencies and commands needed to run an agent
 in DQN Zoo. Using Docker is not a requirement and if `Dockerfile` is not used
 then the list of dependencies to install may have to be adapted depending on
@@ -159,7 +168,8 @@ done
 
 Each agent CSV file in `results.tar.gz` is then a concatenation of all
 associated `results.csv` files, with additional `environment_name` and `seed`
-fields.
+fields. Note the learning curve data is missing `state_value` since logging for
+this quantity was added after the data was generated.
 
 Plots show the average score at periodic evaluation phases during training. Each
 episode during evaluation starts with up to 30 random no-op actions and lasts a
@@ -235,7 +245,7 @@ used we have chosen to open source DQN Zoo using Gym. This does introduce
 another source of differences, though the settings for the Gym Atari
 environments have been chosen so they behave as similar as possible to Xitari.
 
-### Contributing
+## Contributing
 
 Note we are currently not accepting contributions. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for details.
@@ -250,7 +260,7 @@ agents used and this repository:
   title = {{DQN} {Zoo}: Reference implementations of {DQN}-based agents},
   author = {John Quan and Georg Ostrovski},
   url = {http://github.com/deepmind/dqn_zoo},
-  version = {1.0.0},
+  version = {1.2.0},
   year = {2020},
 }
 ```
