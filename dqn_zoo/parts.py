@@ -175,19 +175,19 @@ class EpisodeTracker:
       # First reward is invalid, all other rewards are appended.
       self._current_episode_rewards.append(timestep_t.reward)
 
-    if shaped_reward is not None:
-      if isinstance(shaped_reward, list):
-        self._current_episode_shaped_rewards.extend(shaped_reward)
-      else:
-        self._current_episode_shaped_rewards.append(shaped_reward)
-    if loss is not None:
-      self._current_episode_loss += loss
+    # if shaped_reward is not None:
+    #   if isinstance(shaped_reward, list):
+    #     self._current_episode_shaped_rewards.extend(shaped_reward)
+    #   else:
+    #     self._current_episode_shaped_rewards.append(shaped_reward)
+    # if loss is not None:
+    #   self._current_episode_loss += loss
 
-    if penalties is not None:
-      if isinstance(penalties, list):
-        self._current_episode_penalties.extend(penalties)
-      else:
-        self._current_episode_penalties.append(penalties)
+    # if penalties is not None:
+    #   if isinstance(penalties, list):
+    #     self._current_episode_penalties.extend(penalties)
+    #   else:
+    #     self._current_episode_penalties.append(penalties)
 
     self._num_steps_since_reset += 1
     self._current_episode_step += 1
