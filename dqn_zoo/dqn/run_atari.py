@@ -25,26 +25,19 @@ import itertools
 import sys
 import typing
 
-from absl import app
-from absl import flags
-from absl import logging
 import chex
 import dm_env
 import haiku as hk
 import jax
-from jax.config import config
 import numpy as np
 import optax
-
-from dqn_zoo import atari_data
-from dqn_zoo import gym_atari
-from dqn_zoo import networks
-from dqn_zoo import parts
-from dqn_zoo import processors
-from dqn_zoo import shaping 
+from absl import app, flags, logging
+from dqn_zoo import (atari_data, constants, gym_atari, networks, parts,
+                     processors)
 from dqn_zoo import replay as replay_lib
+from dqn_zoo import shaping
 from dqn_zoo.dqn import agent
-from dqn_zoo import constants
+from jax.config import config
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
@@ -188,7 +181,7 @@ def main(argv):
       optimizer=optimizer,
       transition_accumulator=replay_lib.TransitionAccumulator(),
       replay=replay,
-      shaping_function=shaping_function,
+      # shaping_function=shaping_function,
       batch_size=FLAGS.batch_size,
       exploration_epsilon=exploration_epsilon_schedule,
       min_replay_capacity_fraction=FLAGS.min_replay_capacity_fraction,
@@ -268,7 +261,7 @@ def main(argv):
 
 
 if __name__ == '__main__':
-  config.update('jax_platform_name', 'gpu')  # Default to GPU.
+  config.update('jax_platform_name', 'cpu')  # Default to GPU.
   config.update('jax_numpy_rank_promotion', 'raise')
   config.config_with_absl()
   app.run(main)
