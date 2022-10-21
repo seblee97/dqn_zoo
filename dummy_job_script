@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#SBATCH -p gpu
+#SBATCH -N 1
+
+#SBATCH -n 4
+#SBATCH --mem 8
+
+#SBATCH --time=0-24:00
+
+python -m dqn_zoo.dqn.run_atari --environment_name pong --results_csv_path results/dqn_trial_new.csv --checkpoint_path results/dqn_trial_new.pk
