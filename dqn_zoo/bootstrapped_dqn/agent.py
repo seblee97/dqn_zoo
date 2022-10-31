@@ -2,16 +2,14 @@
 
 from typing import Any, Callable, Mapping, Text
 
-from absl import logging
 import dm_env
 import jax
 import jax.numpy as jnp
 import numpy as onp
 import optax
 import rlax
-
-from dqn_zoo import parts
-from dqn_zoo import processors
+from absl import logging
+from dqn_zoo import parts, processors
 from dqn_zoo import replay as replay_lib
 
 # Batch variant of q_learning.
@@ -169,10 +167,13 @@ class BootstrappedDqn:
 
     timestep = self._preprocessor(timestep)
 
+    # compute unexpected uncertainty measure
+    unexpected_unc = None
+
     if timestep is None:  # Repeat action.
       action = self._action
     else:
-      action = self._action = self._act(timestep)
+      action = self._action = self._act(timestep, unexpected_unc)
 
       for transition in self._transition_accumulator.step(timestep, action):
         mask = self._get_random_mask(self._rng_key)
