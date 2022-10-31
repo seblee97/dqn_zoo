@@ -26,3 +26,4 @@ Pillow==8.3.1
 python-snappy==0.6.1
 
 # Note: ROM license also needs to be accepted e.g. via pip install "gym[atari,accept-rom-license]"
+pyyaml
