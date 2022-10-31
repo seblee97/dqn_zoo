@@ -25,25 +25,23 @@ import itertools
 import sys
 import typing
 
+import chex
 import dm_env
 import haiku as hk
 import jax
 import numpy as np
 import optax
 from absl import app, flags, logging
-from dqn_zoo import (atari_data, constants, gym_atari, gym_key_door, networks,
-                     parts, processors)
+from dqn_zoo import atari_data, constants, gym_key_door, networks, parts, processors
 from dqn_zoo import replay as replay_lib
-from dqn_zoo import shaping
 from dqn_zoo.dqn import agent
 from jax.config import config
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
-flags.DEFINE_string("environment_name", "pong", "")
+flags.DEFINE_string("environment_name", "posner_env", "")
 flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
-flags.DEFINE_bool("use_gym", False, "")
 flags.DEFINE_integer("replay_capacity", int(1e6), "")
 flags.DEFINE_bool("compress_state", True, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
@@ -51,7 +49,7 @@ flags.DEFINE_string("shaping_function_type", "no_penalty", "")
 flags.DEFINE_float("shaping_multiplicative_factor", -0.05, "")
 flags.DEFINE_integer("batch_size", 32, "")
 flags.DEFINE_integer("max_frames_per_episode", 108000, "")  # 30 mins.
-flags.DEFINE_integer("num_action_repeats", 4, "")
+flags.DEFINE_integer("num_action_repeats", 1, "")
 flags.DEFINE_integer("num_stacked_frames", 4, "")
 flags.DEFINE_float("exploration_epsilon_begin_value", 1.0, "")
 flags.DEFINE_float("exploration_epsilon_end_value", 0.1, "")
@@ -60,7 +58,7 @@ flags.DEFINE_float("eval_exploration_epsilon", 0.05, "")
 flags.DEFINE_integer("target_network_update_period", int(4e4), "")
 flags.DEFINE_float("grad_error_bound", 1.0 / 32, "")
 flags.DEFINE_float("learning_rate", 0.00025, "")
-flags.DEFINE_float("optimizer_epsilon", 0.01 / 32 ** 2, "")
+flags.DEFINE_float("optimizer_epsilon", 0.01 / 32**2, "")
 flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
@@ -70,19 +68,19 @@ flags.DEFINE_integer("num_eval_frames", int(5e5), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 flags.DEFINE_string("checkpoint_path", "/tmp/checkpoint.pkl", "")
-flags.DEFINE_string("map_ascii_path", "dqn_zoo/square_multi_room.txt", "")
-flags.DEFINE_string("map_yaml_path", "dqn_zoo/square_multi_room.yaml", "")
-flags.DEFINE_integer("env_scaling", 4, "")
-flags.DEFINE_multi_integer("env_shape", (84, 84, 3), "")
+flags.DEFINE_string("map_ascii_path", "dqn_zoo/bandit_posner_maze.txt", "")
+flags.DEFINE_string("map_yaml_path", "dqn_zoo/bandit_posner_maze.yaml", "")
+flags.DEFINE_integer("env_scaling", 9, "")
+flags.DEFINE_multi_integer("env_shape", (81, 81, 1), "")
 
 
 def main(argv):
-    """Trains DQN agent on Atari."""
+    """Trains DQN agent on Key-Door."""
     del argv
-    logging.info("DQN on Atari on %s.", jax.lib.xla_bridge.get_backend().platform)
+    logging.info("DQN on Key-Door on %s.", jax.lib.xla_bridge.get_backend().platform)
     random_state = np.random.RandomState(FLAGS.seed)
     rng_key = jax.random.PRNGKey(
-        random_state.randint(-sys.maxsize - 1, sys.maxsize + 1)
+        random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
     )
 
     if FLAGS.results_csv_path:
@@ -105,11 +103,11 @@ def main(argv):
             },
             env_shape=FLAGS.env_shape,
         )
-        return gym_atari.RandomNoopsEnvironmentWrapper(
+        return gym_key_door.RandomNoopsEnvironmentWrapper(
             env,
             min_noop_steps=1,
             max_noop_steps=30,
-            seed=random_state.randint(1, 2 ** 32),
+            seed=random_state.randint(1, 2**32),
         )
 
     env = environment_builder()
@@ -137,10 +135,9 @@ def main(argv):
     sample_processed_timestep = preprocessor_builder()(env.reset())
     sample_processed_timestep = typing.cast(dm_env.TimeStep, sample_processed_timestep)
     sample_network_input = sample_processed_timestep.observation
-    assert sample_network_input.shape == (
-        FLAGS.environment_height,
-        FLAGS.environment_width,
-        FLAGS.num_stacked_frames,
+    chex.assert_shape(
+        sample_network_input,
+        (FLAGS.environment_height, FLAGS.environment_width, FLAGS.num_stacked_frames),
     )
 
     exploration_epsilon_schedule = parts.LinearSchedule(
@@ -195,13 +192,6 @@ def main(argv):
         centered=True,
     )
 
-    if FLAGS.shaping_function_type == constants.NO_PENALTY:
-        shaping_function = shaping.NoPenalty()
-    if FLAGS.shaping_function_type == constants.HARD_CODED_PENALTY:
-        shaping_function = shaping.HardCodedPenalty(
-            penalty=FLAGS.shaping_multiplicative_factor
-        )
-
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
     train_agent = agent.Dqn(
@@ -211,7 +201,7 @@ def main(argv):
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
-        shaping_function=shaping_function,
+        # shaping_function=shaping_function,
         batch_size=FLAGS.batch_size,
         exploration_epsilon=exploration_epsilon_schedule,
         min_replay_capacity_fraction=FLAGS.min_replay_capacity_fraction,
@@ -252,13 +242,15 @@ def main(argv):
         train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
         num_train_frames = 0 if state.iteration == 0 else FLAGS.num_train_frames
         train_seq_truncated = itertools.islice(train_seq, num_train_frames)
-        train_stats = parts.generate_statistics(train_seq_truncated)
+        train_trackers = parts.make_default_trackers(train_agent)
+        train_stats = parts.generate_statistics(train_trackers, train_seq_truncated)
 
         logging.info("Evaluation iteration %d.", state.iteration)
         eval_agent.network_params = train_agent.online_params
         eval_seq = parts.run_loop(eval_agent, env, FLAGS.max_frames_per_episode)
         eval_seq_truncated = itertools.islice(eval_seq, FLAGS.num_eval_frames)
-        eval_stats = parts.generate_statistics(eval_seq_truncated)
+        eval_trackers = parts.make_default_trackers(eval_agent)
+        eval_stats = parts.generate_statistics(eval_trackers, eval_seq_truncated)
 
         # Logging and checkpointing.
         human_normalized_score = atari_data.get_human_normalized_score(
@@ -275,6 +267,7 @@ def main(argv):
             ("eval_frame_rate", eval_stats["step_rate"], "%4.0f"),
             ("train_frame_rate", train_stats["step_rate"], "%4.0f"),
             ("train_exploration_epsilon", train_agent.exploration_epsilon, "%.3f"),
+            ("train_state_value", train_stats["state_value"], "%.3f"),
             ("normalized_return", human_normalized_score, "%.3f"),
             ("capped_normalized_return", capped_human_normalized_score, "%.3f"),
             ("human_gap", 1.0 - capped_human_normalized_score, "%.3f"),
