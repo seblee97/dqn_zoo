@@ -44,6 +44,7 @@ flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
 flags.DEFINE_integer("replay_capacity", int(1e6), "")
 flags.DEFINE_bool("compress_state", True, "")
+flags.DEFINE_bool("grayscale", False, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_string("shaping_function_type", "no_penalty", "")
 flags.DEFINE_float("shaping_multiplicative_factor", -0.05, "")
@@ -63,15 +64,19 @@ flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
 flags.DEFINE_integer("num_iterations", 200, "")
-flags.DEFINE_integer("num_train_frames", int(1e6), "")  # Per iteration.
-flags.DEFINE_integer("num_eval_frames", int(5e5), "")  # Per iteration.
+flags.DEFINE_integer("num_train_frames", int(5e4), "")  # Per iteration.
+flags.DEFINE_integer("num_eval_frames", int(5e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 flags.DEFINE_string("checkpoint_path", "/tmp/checkpoint.pkl", "")
-flags.DEFINE_string("map_ascii_path", "dqn_zoo/bandit_posner_maze.txt", "")
-flags.DEFINE_string("map_yaml_path", "dqn_zoo/bandit_posner_maze.yaml", "")
-flags.DEFINE_integer("env_scaling", 9, "")
-flags.DEFINE_multi_integer("env_shape", (81, 81, 1), "")
+flags.DEFINE_string(
+    "map_ascii_path", "dqn_zoo/key_door_maps/bandit_posner_maze.txt", ""
+)
+flags.DEFINE_string(
+    "map_yaml_path", "dqn_zoo/key_door_maps/bandit_posner_maze.yaml", ""
+)
+flags.DEFINE_integer("env_scaling", 8, "")
+flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 
 
 def main(argv):
@@ -128,16 +133,26 @@ def main(argv):
             num_pooled_frames=2,
             zero_discount_on_life_loss=True,
             num_stacked_frames=FLAGS.num_stacked_frames,
-            grayscaling=True,
+            grayscaling=FLAGS.grayscale,
         )
 
     # Create sample network input from sample preprocessor output.
     sample_processed_timestep = preprocessor_builder()(env.reset())
     sample_processed_timestep = typing.cast(dm_env.TimeStep, sample_processed_timestep)
     sample_network_input = sample_processed_timestep.observation
+
+    if FLAGS.grayscale:
+        num_channels = 1
+    else:
+        num_channels = 3
+
     chex.assert_shape(
         sample_network_input,
-        (FLAGS.environment_height, FLAGS.environment_width, FLAGS.num_stacked_frames),
+        (
+            FLAGS.environment_height,
+            FLAGS.environment_width,
+            num_channels * FLAGS.num_stacked_frames,
+        ),
     )
 
     exploration_epsilon_schedule = parts.LinearSchedule(
