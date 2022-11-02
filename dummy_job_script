@@ -1,11 +1,11 @@
 #!/bin/bash
 
 #SBATCH -p gpu
+
 #SBATCH -N 1
-
-#SBATCH -n 4
-#SBATCH --mem 8
-
+#SBATCH --mem 8G
+#SBATCH --gres=gpu:1
+#SBATCH --gpus-per-node=1
 #SBATCH --time=0-24:00
 
-python -m dqn_zoo.dqn.run_atari --environment_name pong --results_csv_path results/dqn_trial_new.csv --checkpoint_path results/dqn_trial_new.pk
+python -m dqn_zoo.dqn.run_key_door --results_csv_path results/dqn_trial_kd.csv --checkpoint_path results/dqn_trial_kd.pkl
