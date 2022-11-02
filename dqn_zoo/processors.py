@@ -366,7 +366,11 @@ def resize(shape: Tuple[int, ...]) -> Processor[[np.ndarray], np.ndarray]:
     image_shape = (shape[1], shape[0])
 
     def resize_fn(array):
-        image = Image.fromarray(array).resize(image_shape, Image.BILINEAR)
+        if len(array.shape) == 3:
+            pil_image = Image.fromarray((array * 255).astype(np.uint8), "RGB")
+        else:
+            pil_image = Image.fromarray(array)
+        image = pil_image.resize(image_shape, Image.BILINEAR)
         image = np.array(image)
         return image
 
@@ -434,6 +438,11 @@ def atari(
     #   Type:      F   |   M     M     M     M   |   M     M     L   |   F   |
     #   Frames:    A   |   B     C     D     E   |   F     G     H   |   I   |
     #   Output: max[0A]|   ~     ~     ~  max[DE]|   ~     ~  max[H0]|max[0I]|
+    if grayscaling:
+        stacking = lambda obs: np.stack(obs, axis=-1)
+    else:
+        stacking = lambda obs: np.concatenate(obs, axis=-1)
+
     return Sequential(
         # When the number of lives decreases, set discount to 0.
         ZeroDiscountOnLifeLoss() if zero_discount_on_life_loss else identity,
@@ -485,7 +494,7 @@ def atari(
                     trailing_zero_pad(length=num_stacked_frames),
                     # obs: A000, ~, ~, ~, AB00, ~, ~, ~, ABC0, ~, ~, ~, ABCD,
                     #      ~, ~, ~, BCDE, ...
-                    lambda obs: np.stack(obs, axis=-1),
+                    stacking,
                 ),
             )
         ),
