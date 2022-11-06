@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional, Tuple, Union
 
 import dm_env
@@ -21,9 +22,10 @@ class GymKeyDoor(dm_env.Environment):
 
     def reset(self) -> dm_env.TimeStep:
         """Resets the environment and starts a new episode."""
-        if self._run_index % 100 == 0 and self._run_index != 0:
+        if self._run_index % 10 == 0 and self._run_index != 0:
+            os.makedirs("visualisations", exist_ok=True)
             self._key_door_env.visualise_episode_history(
-                f"train_dqnkd_{self._run_index}.mp4"
+                f"visualisations/train_dqnkd_{self._run_index}.mp4"
             )
         observation = self._key_door_env.reset_environment()
         lives = np.int32(1)
