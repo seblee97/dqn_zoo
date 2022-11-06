@@ -179,13 +179,6 @@ def main(argv):
         centered=True,
     )
 
-    if FLAGS.shaping_function_type == constants.NO_PENALTY:
-        shaping_function = shaping.NoPenalty()
-    if FLAGS.shaping_function_type == constants.HARD_CODED_PENALTY:
-        shaping_function = shaping.HardCodedPenalty(
-            penalty=FLAGS.shaping_multiplicative_factor
-        )
-
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
     train_agent = agent.Dqn(
@@ -195,7 +188,6 @@ def main(argv):
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
-        # shaping_function=shaping_function,
         batch_size=FLAGS.batch_size,
         exploration_epsilon=exploration_epsilon_schedule,
         min_replay_capacity_fraction=FLAGS.min_replay_capacity_fraction,
