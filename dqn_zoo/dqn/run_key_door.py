@@ -67,8 +67,8 @@ flags.DEFINE_integer("num_iterations", 200, "")
 flags.DEFINE_integer("num_train_frames", int(5e4), "")  # Per iteration.
 flags.DEFINE_integer("num_eval_frames", int(5e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
-flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
-flags.DEFINE_string("checkpoint_path", "/tmp/checkpoint.pkl", "")
+# flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
+# flags.DEFINE_string("checkpoint_path", "/tmp/checkpoint.pkl", "")
 flags.DEFINE_string(
     "map_ascii_path", "dqn_zoo/key_door_maps/bandit_posner_maze.txt", ""
 )
@@ -87,11 +87,6 @@ def main(argv):
     rng_key = jax.random.PRNGKey(
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
     )
-
-    if FLAGS.results_csv_path:
-        writer = parts.CsvWriter(FLAGS.results_csv_path)
-    else:
-        writer = parts.NullWriter()
 
     def environment_builder():
         """Creates Key-Door environment."""
@@ -232,9 +227,19 @@ def main(argv):
         rng_key=eval_rng_key,
     )
 
-    # Set up checkpointing.
-    # checkpoint = parts.NullCheckpoint()
-    checkpoint = parts.ImplementedCheckpoint(checkpoint_path=FLAGS.checkpoint_path)
+    # create timestamp for logging and checkpoint path
+    raw_datetime = datetime.datetime.fromtimestamp(time.time())
+    exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+    exp_path = os.path.join("results", exp_timestamp)
+    os.makedirs(exp_path, exist_ok=True)
+
+    # setup writer
+    writer = parts.CsvWriter(os.path.join(exp_path, "writer.csv"))
+
+    # setup checkpointing.
+    checkpoint = parts.ImplementedCheckpoint(
+        checkpoint_path=os.path.join(exp_path, "checkpoint.pkl")
+    )
 
     if checkpoint.can_be_restored():
         checkpoint.restore()
