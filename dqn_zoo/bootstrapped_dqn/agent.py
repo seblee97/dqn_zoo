@@ -187,7 +187,6 @@ class BootstrappedDqn(parts.Agent):
             a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
                 seed=policy_key
             )
-            print(exploration_epsilon, a_t)
             v_t = jnp.max(q_t, axis=-1)
             return rng_key, a_t, v_t
 
