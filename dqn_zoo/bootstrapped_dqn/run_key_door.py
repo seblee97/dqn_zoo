@@ -61,6 +61,9 @@ flags.DEFINE_string(
 )
 flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
+flags.DEFINE_bool(
+    "variance_network", True, ""
+)  # compute direct variance in heads (http://auai.org/uai2018/proceedings/papers/35.pdf)
 
 
 def main(argv):
@@ -73,6 +76,12 @@ def main(argv):
     rng_key = jax.random.PRNGKey(
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1)
     )
+
+    # create timestamp for logging and checkpoint path
+    raw_datetime = datetime.datetime.fromtimestamp(time.time())
+    exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+    exp_path = os.path.join("results", exp_timestamp)
+    os.makedirs(exp_path, exist_ok=True)
 
     def environment_builder():
         """Creates Key-Door environment."""
@@ -88,6 +97,7 @@ def main(argv):
                 constants.TORCH_AXES: False,
             },
             env_shape=FLAGS.env_shape,
+            checkpoint_path=exp_path,
         )
         return gym_key_door.RandomNoopsEnvironmentWrapper(
             env,
@@ -120,7 +130,7 @@ def main(argv):
         )
 
     # Create sample network input from sample preprocessor output.
-    sample_processed_timestep = preprocessor_builder()(env.reset())
+    sample_processed_timestep = preprocessor_builder()(env.reset(train=True))
     sample_processed_timestep = typing.cast(dm_env.TimeStep, sample_processed_timestep)
     sample_network_input = sample_processed_timestep.observation
 
@@ -197,6 +207,7 @@ def main(argv):
         preprocessor=preprocessor_builder(),
         sample_network_input=sample_network_input,
         network=network,
+        variance_network=FLAGS.variance_network,
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
@@ -217,12 +228,6 @@ def main(argv):
         exploration_epsilon=FLAGS.eval_exploration_epsilon,
         rng_key=eval_rng_key,
     )
-
-    # create timestamp for logging and checkpoint path
-    raw_datetime = datetime.datetime.fromtimestamp(time.time())
-    exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
-    exp_path = os.path.join("results", exp_timestamp)
-    os.makedirs(exp_path, exist_ok=True)
 
     # setup writer
     writer = parts.CsvWriter(os.path.join(exp_path, "writer.csv"))
@@ -258,7 +263,9 @@ def main(argv):
 
         logging.info("Evaluation iteration %d.", state.iteration)
         eval_agent.network_params = train_agent.online_params
-        eval_seq = parts.run_loop(eval_agent, env, FLAGS.max_frames_per_episode)
+        eval_seq = parts.run_loop(
+            eval_agent, env, FLAGS.max_frames_per_episode, train=False
+        )
         eval_seq_truncated = itertools.islice(eval_seq, FLAGS.num_eval_frames)
         eval_trackers = parts.make_default_trackers(eval_agent)
         eval_stats = parts.generate_statistics(eval_trackers, eval_seq_truncated)
