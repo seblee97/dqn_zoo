@@ -14,9 +14,7 @@ class GymKeyDoor(dm_env.Environment):
     def __init__(self, env_args, env_shape, checkpoint_path):
         self._env_shape = env_shape
         self._checkpoint_path = checkpoint_path
-        self._visualisations_path = os.path.join(
-            self._checkpoint_path, "visualisations"
-        )
+        self._visualisations_path = os.path.join(self._checkpoint_path, "rollouts")
         os.makedirs(self._visualisations_path, exist_ok=True)
         self._key_door_env = posner_env.PosnerEnv(**env_args)
         self._key_door_env = visualisation_env.VisualisationEnv(self._key_door_env)
