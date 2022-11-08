@@ -27,6 +27,7 @@ class BootstrappedDqn(parts.Agent):
         preprocessor: processors.Processor,
         sample_network_input: jnp.ndarray,
         network: parts.Network,
+        variance_network: bool,
         optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.TransitionReplay,
@@ -51,14 +52,29 @@ class BootstrappedDqn(parts.Agent):
         self._min_replay_capacity = min_replay_capacity_fraction * replay.capacity
         self._learn_period = learn_period
         self._target_network_update_period = target_network_update_period
+        self._variance_network = variance_network
 
         # Initialize network parameters and optimizer.
-        self._rng_key, network_rng_key = jax.random.split(rng_key)
+        self._rng_key, network_rng_key, var_network_rng_key = jax.random.split(
+            rng_key, 3
+        )
+
         self._online_params = network.init(
             network_rng_key, sample_network_input[None, ...]
         )
         self._target_params = self._online_params
         self._opt_state = optimizer.init(self._online_params)
+
+        if variance_network:
+            self._var_online_params = network.init(
+                var_network_rng_key, sample_network_input[None, ...]
+            )
+            self._var_target_params = self._var_online_params
+            self._var_opt_state = optimizer.init(self._var_online_params)
+        else:
+            self._var_online_params = None
+            self._var_target_params = None
+            self._var_opt_state = None
 
         # Other agent state: last action, frame count, etc.
         self._action = None
@@ -86,28 +102,35 @@ class BootstrappedDqn(parts.Agent):
         def loss_fn(online_params, target_params, transitions, rng_key):
             """Calculates loss given network parameters and transitions."""
             _, *apply_keys = jax.random.split(rng_key, 4)
+            # Batch : Heads : Actions (source state)
             q_tm1 = network.apply(
                 online_params, apply_keys[0], transitions.s_tm1
             ).multi_head_output
+            # Batch : Heads : Actions (destination state)
             q_t = network.apply(
                 online_params, apply_keys[1], transitions.s_t
             ).multi_head_output
+            # Batch : Heads : Actions (destination state, target network)
             q_target_t = network.apply(
                 target_params, apply_keys[2], transitions.s_t
             ).multi_head_output
 
+            # Batch x Heads : Actions
             flattened_q = jnp.reshape(q_tm1, (-1, q_tm1.shape[-1]))
             flattened_q_t = jnp.reshape(q_t, (-1, q_t.shape[-1]))
             flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
 
-            # compute shaping function F(s, a, s')
-            # shaped_rewards = shaping_function(q_target_t, transitions, apply_keys[2])
-
+            # Batch x Heads
             repeated_actions = jnp.repeat(transitions.a_tm1, num_heads)
-            repeated_rewards = jnp.repeat(transitions.r_t, num_heads)
             repeated_discounts = jnp.repeat(transitions.discount_t, num_heads)
 
-            td_errors = _batch_double_q_learning(
+            if transitions.r_t.shape == repeated_actions.shape:
+                repeated_rewards = transitions.r_t
+            else:
+                repeated_rewards = jnp.repeat(transitions.r_t, num_heads)
+
+            # Batch x Heads
+            raw_td_errors = _batch_double_q_learning(
                 flattened_q,
                 repeated_actions,
                 repeated_rewards,
@@ -116,28 +139,77 @@ class BootstrappedDqn(parts.Agent):
                 flattened_q_t,
             )
 
-            td_errors = rlax.clip_gradient(
-                td_errors, -grad_error_bound / num_heads, grad_error_bound / num_heads
+            clipped_td_errors = rlax.clip_gradient(
+                raw_td_errors,
+                -grad_error_bound / num_heads,
+                grad_error_bound / num_heads,
             )
-            losses = rlax.l2_loss(td_errors)
+            losses = rlax.l2_loss(clipped_td_errors)
             assert losses.shape == (self._batch_size * num_heads,)
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = jnp.sum(mask * losses) / jnp.sum(mask)
-            return loss
+            return loss, {"loss": loss, "deltas": raw_td_errors}
 
-        def update(rng_key, opt_state, online_params, target_params, transitions):
+        def update(
+            rng_key,
+            opt_state,
+            online_params,
+            target_params,
+            transitions,
+            var_opt_state,
+            var_online_params,
+            var_target_params,
+        ):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
-            loss_values, d_loss_d_params = jax.value_and_grad(loss_fn)(
+            d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
                 online_params,
                 target_params,
                 transitions,
                 update_key,
             )
+
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
-            return rng_key, new_opt_state, new_online_params
+
+            if variance_network:
+
+                # create identical transition object with meta-reward
+                var_transitions = replay_lib.MaskedTransition(
+                    s_tm1=transitions.s_tm1,
+                    a_tm1=transitions.a_tm1,
+                    r_t=aux["deltas"] ** 2,
+                    discount_t=transitions.discount_t**2,
+                    s_t=transitions.s_t,
+                    mask_t=transitions.mask_t,
+                )
+
+                rng_key, var_update_key = jax.random.split(rng_key)
+                var_d_loss_d_params, var_aux = jax.grad(loss_fn, has_aux=True)(
+                    var_online_params,
+                    var_target_params,
+                    var_transitions,
+                    var_update_key,
+                )
+
+                var_updates, var_new_opt_state = optimizer.update(
+                    var_d_loss_d_params, var_opt_state
+                )
+                var_new_online_params = optax.apply_updates(
+                    var_online_params, var_updates
+                )
+            else:
+                var_new_opt_state = None
+                var_new_online_params = None
+
+            return (
+                rng_key,
+                new_opt_state,
+                new_online_params,
+                var_new_opt_state,
+                var_new_online_params,
+            )
 
             # compute expected uncertainty
             # use gradient transformation wrapper from optax
@@ -214,7 +286,7 @@ class BootstrappedDqn(parts.Agent):
 
             for transition in self._transition_accumulator.step(timestep, action):
                 mask = self._get_random_mask(self._rng_key)
-                masked_transition = replay_lib.MaskedTransition(
+                transition = replay_lib.MaskedTransition(
                     s_tm1=transition.s_tm1,
                     a_tm1=transition.a_tm1,
                     r_t=transition.r_t,
@@ -222,7 +294,7 @@ class BootstrappedDqn(parts.Agent):
                     s_t=transition.s_t,
                     mask_t=mask,
                 )
-                self._replay.add(masked_transition)
+                self._replay.add(transition)
 
         if self._replay.size < self._min_replay_capacity:
             return action, None, None, None
@@ -270,6 +342,8 @@ class BootstrappedDqn(parts.Agent):
             self._rng_key,
             self._opt_state,
             self._online_params,
+            self._var_opt_state,
+            self._var_online_params
             # loss_values,
             # shaped_rewards,
             # penalties,
@@ -279,6 +353,9 @@ class BootstrappedDqn(parts.Agent):
             self._online_params,
             self._target_params,
             transitions,
+            self._var_opt_state,
+            self._var_online_params,
+            self._var_target_params,
         )
         # return loss_values.item(), shaped_rewards.tolist(), penalties.tolist()
 
