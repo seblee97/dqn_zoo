@@ -76,6 +76,7 @@ def run_loop(
     environment: dm_env.Environment,
     max_steps_per_episode: int = 0,
     yield_before_reset: bool = False,
+    train: bool = True,
 ) -> Iterable[
     Tuple[dm_env.Environment, Optional[dm_env.TimeStep], Agent, Optional[Action]]
 ]:
@@ -103,7 +104,7 @@ def run_loop(
 
         t = 0
         agent.reset()
-        timestep_t = environment.reset()  # timestep_0.
+        timestep_t = environment.reset(train=train)  # timestep_0.
 
         while True:  # For each step in the current episode.
             a_t = agent.step(timestep_t)
