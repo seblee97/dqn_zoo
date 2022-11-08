@@ -11,27 +11,47 @@ from dqn_zoo.key_door import posner_env, visualisation_env
 class GymKeyDoor(dm_env.Environment):
     """Gym KeyDoor with a `dm_env.Environment` interface."""
 
-    def __init__(self, env_args, env_shape):
+    def __init__(self, env_args, env_shape, checkpoint_path):
         self._env_shape = env_shape
+        self._checkpoint_path = checkpoint_path
+        self._visualisations_path = os.path.join(
+            self._checkpoint_path, "visualisations"
+        )
+        os.makedirs(self._visualisations_path, exist_ok=True)
         self._key_door_env = posner_env.PosnerEnv(**env_args)
         self._key_door_env = visualisation_env.VisualisationEnv(self._key_door_env)
-        # environment = visualisation_env.VisualisationEnv(environment)
         self._start_of_episode = True
 
-        self._run_index = 0
+        self._train_run_index = 0
+        self._test_run_index = 0
 
-    def reset(self) -> dm_env.TimeStep:
+    def reset(self, train: bool) -> dm_env.TimeStep:
         """Resets the environment and starts a new episode."""
-        if self._run_index % 10 == 0 and self._run_index != 0:
-            os.makedirs("visualisations", exist_ok=True)
-            self._key_door_env.visualise_episode_history(
-                f"visualisations/train_dqnkd_{self._run_index}.mp4"
-            )
-        observation = self._key_door_env.reset_environment()
+        if train:
+            if self._train_run_index % 100 == 0 and self._train_run_index != 0:
+                self._key_door_env.visualise_episode_history(
+                    os.path.join(
+                        self._visualisations_path,
+                        f"train_episode_{self._train_run_index}.mp4",
+                    )
+                )
+        else:
+            if self._test_run_index % 100 == 0 and self._test_run_index != 0:
+                self._key_door_env.visualise_episode_history(
+                    os.path.join(
+                        self._visualisations_path,
+                        f"test_episode_{self._test_run_index}.mp4",
+                    ),
+                    history="test",
+                )
+        observation = self._key_door_env.reset_environment(train=train)
         lives = np.int32(1)
         timestep = dm_env.restart((observation, lives))
         self._start_of_episode = False
-        self._run_index += 1
+        if train:
+            self._train_run_index += 1
+        else:
+            self._test_run_index += 1
         return timestep
 
     def step(self, action: np.int32) -> dm_env.TimeStep:
@@ -127,7 +147,7 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
         self._noop_action = noop_action
         self._rng = np.random.RandomState(seed)
 
-    def reset(self):
+    def reset(self, train: bool):
         """Begins new episode.
 
         This method resets the wrapped environment and applies a random number
@@ -143,7 +163,9 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
           RuntimeError: if an episode end occurs while the inner environment
             is being stepped through with the noop action.
         """
-        return self._apply_random_noops(initial_timestep=self._environment.reset())
+        return self._apply_random_noops(
+            initial_timestep=self._environment.reset(train=train)
+        )
 
     def step(self, action):
         """Steps environment given action.
