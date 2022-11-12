@@ -14,8 +14,8 @@ class GymKeyDoor(dm_env.Environment):
     def __init__(self, env_args, env_shape, checkpoint_path):
         self._env_shape = env_shape
         self._checkpoint_path = checkpoint_path
-        self._visualisations_path = os.path.join(self._checkpoint_path, "rollouts")
-        os.makedirs(self._visualisations_path, exist_ok=True)
+        self._rollout_path = os.path.join(self._checkpoint_path, "rollouts")
+        os.makedirs(self._rollout_path, exist_ok=True)
         self._key_door_env = posner_env.PosnerEnv(**env_args)
         self._key_door_env = visualisation_env.VisualisationEnv(self._key_door_env)
         self._start_of_episode = True
@@ -29,7 +29,7 @@ class GymKeyDoor(dm_env.Environment):
             if self._train_run_index % 100 == 0 and self._train_run_index != 0:
                 self._key_door_env.visualise_episode_history(
                     os.path.join(
-                        self._visualisations_path,
+                        self._rollout_path,
                         f"train_episode_{self._train_run_index}.mp4",
                     )
                 )
@@ -37,7 +37,7 @@ class GymKeyDoor(dm_env.Environment):
             if self._test_run_index % 100 == 0 and self._test_run_index != 0:
                 self._key_door_env.visualise_episode_history(
                     os.path.join(
-                        self._visualisations_path,
+                        self._rollout_path,
                         f"test_episode_{self._test_run_index}.mp4",
                     ),
                     history="test",
@@ -123,6 +123,24 @@ class GymKeyDoor(dm_env.Environment):
             plt.colorbar()
             fig.savefig(fname=full_path)
             plt.close(fig)
+
+    def get_state_representation(
+        self,
+        tuple_state: Optional[Tuple] = None,
+    ) -> Union[tuple, np.ndarray]:
+        return self._key_door_env.get_state_representation(tuple_state=tuple_state)
+
+    def average_values_over_positional_states(self, values):
+        return self._key_door_env.average_values_over_positional_states(values)
+
+    def plot_heatmap_over_env(self, heatmap, save_name):
+        return self._key_door_env.plot_heatmap_over_env(
+            heatmap=heatmap, save_name=save_name
+        )
+
+    @property
+    def state_space(self) -> List[Tuple[int, int]]:
+        return self._key_door_env.state_space
 
 
 class RandomNoopsEnvironmentWrapper(dm_env.Environment):
@@ -216,3 +234,19 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
 
     def close(self):
         return self._environment.close()
+
+    def get_state_representation(
+        self,
+        tuple_state: Optional[Tuple] = None,
+    ) -> Union[tuple, np.ndarray]:
+        return self._environment.get_state_representation(tuple_state=tuple_state)
+
+    def average_values_over_positional_states(self, values):
+        return self._environment.average_values_over_positional_states(values)
+
+    def plot_heatmap_over_env(self, heatmap, save_name):
+        return self._environment.plot_heatmap_over_env(heatmap, save_name)
+
+    @property
+    def state_space(self) -> List[Tuple[int, int]]:
+        return self._environment.state_space
