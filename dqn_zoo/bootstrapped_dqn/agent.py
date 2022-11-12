@@ -11,6 +11,7 @@ import numpy as np
 import optax
 import rlax
 from absl import logging
+
 from dqn_zoo import parts, processors
 from dqn_zoo import replay as replay_lib
 
@@ -86,6 +87,13 @@ class BootstrappedDqn(parts.Agent):
         # Define jitted loss, update, and policy functions here instead of as
         # class methods, to emphasize that these are meant to be pure functions
         # and should not access the agent object's state via `self`.
+
+        def _forward(params, state):
+            _, split_key = jax.random.split(rng_key)
+            q_values = network.apply(params, split_key, state).multi_head_output
+            return q_values
+
+        self._forward = jax.jit(_forward)
 
         def shaping_output(target_params, transitions, rng_key):
             _, *apply_keys = jax.random.split(rng_key, 3)
@@ -398,3 +406,10 @@ class BootstrappedDqn(parts.Agent):
         self._online_params = jax.device_put(state["online_params"])
         self._target_params = jax.device_put(state["target_params"])
         self._replay.set_state(state["replay"])
+
+    def forward_all_heads(self, state, variance: bool = False):
+        if variance:
+            params = self._var_online_params
+        else:
+            params = self._online_params
+        return self._forward(state=state, params=params)
