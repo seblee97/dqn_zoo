@@ -13,11 +13,12 @@ import jax
 import numpy as np
 import optax
 from absl import app, flags, logging
+from jax.config import config
+
 from dqn_zoo import atari_data, constants, gym_key_door, networks, parts, processors
 from dqn_zoo import replay as replay_lib
 from dqn_zoo import shaping
 from dqn_zoo.bootstrapped_dqn import agent
-from jax.config import config
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
@@ -53,17 +54,16 @@ flags.DEFINE_integer("num_eval_frames", int(5e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 # flags.DEFINE_string("checkpoint_path", None, "")
-flags.DEFINE_string(
-    "map_ascii_path", "dqn_zoo/key_door_maps/bandit_posner_maze.txt", ""
-)
-flags.DEFINE_string(
-    "map_yaml_path", "dqn_zoo/key_door_maps/bandit_posner_maze.yaml", ""
-)
+flags.DEFINE_string("map_ascii_path", "dqn_zoo/key_door_maps/multi_room_bandit.txt", "")
+flags.DEFINE_string("map_yaml_path", "dqn_zoo/key_door_maps/multi_room_bandit.yaml", "")
 flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 flags.DEFINE_bool(
     "variance_network", True, ""
 )  # compute direct variance in heads (http://auai.org/uai2018/proceedings/papers/35.pdf)
+flags.DEFINE_integer(
+    "visualise_values", 1, ""
+)  # iteration interval between value function visualisations
 
 
 def main(argv):
@@ -82,6 +82,9 @@ def main(argv):
     exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
     exp_path = os.path.join("results", exp_timestamp)
     os.makedirs(exp_path, exist_ok=True)
+
+    visualisation_path = os.path.join(exp_path, "visualisations")
+    os.makedirs(visualisation_path, exist_ok=True)
 
     def environment_builder():
         """Creates Key-Door environment."""
@@ -269,6 +272,55 @@ def main(argv):
         eval_seq_truncated = itertools.islice(eval_seq, FLAGS.num_eval_frames)
         eval_trackers = parts.make_default_trackers(eval_agent)
         eval_stats = parts.generate_statistics(eval_trackers, eval_seq_truncated)
+
+        # visualise value function over environment
+        if state.iteration != 0 and state.iteration % FLAGS.visualise_values == 0:
+
+            # use train agent not eval agent wrapper
+            (
+                raw_state_action_values,
+                state_action_value_means,
+                state_action_value_stds,
+                state_action_value_variance,
+            ) = parts.compute_value_function(
+                train_agent,
+                env,
+                FLAGS.num_stacked_frames,
+                FLAGS.env_shape[:2],
+                variance_network=FLAGS.variance_network,
+            )
+
+            averaged_value_means_position = env.average_values_over_positional_states(
+                state_action_value_means
+            )
+            averaged_value_stds_position = env.average_values_over_positional_states(
+                state_action_value_stds
+            )
+            averaged_value_variance_position = (
+                env.average_values_over_positional_states(state_action_value_variance)
+            )
+
+            env.plot_heatmap_over_env(
+                heatmap=averaged_value_means_position,
+                save_name=os.path.join(
+                    visualisation_path,
+                    f"value_function_mean_{state.iteration}.pdf",
+                ),
+            )
+            env.plot_heatmap_over_env(
+                heatmap=averaged_value_stds_position,
+                save_name=os.path.join(
+                    visualisation_path,
+                    f"value_function_std_{state.iteration}.pdf",
+                ),
+            )
+            env.plot_heatmap_over_env(
+                heatmap=averaged_value_variance_position,
+                save_name=os.path.join(
+                    visualisation_path,
+                    f"value_function_variance_{state.iteration}.pdf",
+                ),
+            )
 
         # Logging and checkpointing.
         human_normalized_score = atari_data.get_human_normalized_score(
