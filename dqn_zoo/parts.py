@@ -34,6 +34,7 @@ import dm_env
 import jax
 import jax.numpy as jnp
 import numpy as np
+from PIL import Image
 
 from dqn_zoo import networks, processors
 
@@ -557,3 +558,62 @@ class AttributeDict(dict):
 
     def __delattr__(self, key):
         del self[key]
+
+
+def compute_value_function(
+    agent, env, num_frame_stack: int, image_shape, variance_network: bool
+):
+
+    # compute state action values for a non-tabular env
+    raw_state_action_values = {}
+    state_action_value_means = {}
+    state_action_value_stds = {}
+    state_action_value_variances = {}
+
+    for tuple_state in env.state_space:
+        # width : height : channel
+        np_state_representation = env.get_state_representation(tuple_state=tuple_state)
+
+        if np_state_representation.shape[2] == 3:
+            pil_image = Image.fromarray(
+                (np_state_representation * 255).astype(np.uint8), "RGB"
+            )
+        else:
+            pil_image = Image.fromarray(np_state_representation)
+        image = pil_image.resize(image_shape, Image.BILINEAR)
+        image = np.array(image)
+        image = jnp.array(image)
+
+        # channel here is just RGB or Grayscale dim, to 'mimic' frame stacking we have to
+        # stack copies; this introduces some error.
+        stacked_representation = jnp.repeat(image, num_frame_stack, axis=2)
+        # add dummy batch dimension
+        all_head_values = np.array(
+            agent.forward_all_heads(stacked_representation[None, ...])[0]
+        )  # heads : actions
+
+        raw_state_action_values[tuple_state] = all_head_values
+
+        all_branch_max_values = np.max(all_head_values, axis=-1)
+        mean_max_values = np.mean(all_branch_max_values)
+        std_max_values = np.std(all_branch_max_values)
+        state_action_value_means[tuple_state] = mean_max_values
+        state_action_value_stds[tuple_state] = std_max_values
+
+        if variance_network:
+            all_head_variances = np.array(
+                agent.forward_all_heads(
+                    stacked_representation[None, ...], variance=True
+                )[0]
+            )  # heads : actions
+            mean_head_variances = np.mean(all_head_variances, axis=-1)
+            mean_mean_head_variances = np.mean(mean_head_variances)
+
+            state_action_value_variances[tuple_state] = mean_mean_head_variances
+
+    return (
+        raw_state_action_values,
+        state_action_value_means,
+        state_action_value_stds,
+        state_action_value_variances,
+    )
