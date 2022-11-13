@@ -34,7 +34,7 @@ flags.DEFINE_float("shaping_multiplicative_factor", -0.05, "")
 flags.DEFINE_integer("num_heads", 10, "")
 flags.DEFINE_float("mask_probability", 0.25, "")
 flags.DEFINE_integer("batch_size", 32, "")
-flags.DEFINE_integer("max_frames_per_episode", 100, "")  # 30 mins.
+flags.DEFINE_integer("max_frames_per_episode", 500, "")  # 30 mins.
 flags.DEFINE_integer("num_action_repeats", 1, "")
 flags.DEFINE_integer("num_stacked_frames", 4, "")
 flags.DEFINE_float("exploration_epsilon_begin_value", 1.0, "")
