@@ -86,7 +86,7 @@ def main(argv):
     visualisation_path = os.path.join(exp_path, "visualisations")
     os.makedirs(visualisation_path, exist_ok=True)
 
-    def environment_builder():
+    def environment_builder(train_index: int = 0, test_index: int = 0):
         """Creates Key-Door environment."""
         env = gym_key_door.GymKeyDoor(
             env_args={
@@ -99,6 +99,8 @@ def main(argv):
                 constants.BATCH_DIMENSION: False,
                 constants.TORCH_AXES: False,
             },
+            train_index=train_index,
+            test_index=test_index,
             env_shape=FLAGS.env_shape,
             checkpoint_path=exp_path,
         )
@@ -255,7 +257,12 @@ def main(argv):
 
     while state.iteration <= FLAGS.num_iterations:
         # New environment for each iteration to allow for determinism if preempted.
-        env = environment_builder()
+        if state.iteration == 0:
+            env = environment_builder(train_index=0, test_index=0)
+        else:
+            env = environment_builder(
+                train_index=env.train_index, test_index=env.test_index
+            )
 
         logging.info("Training iteration %d.", state.iteration)
         train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
