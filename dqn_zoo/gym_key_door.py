@@ -11,7 +11,7 @@ from dqn_zoo.key_door import posner_env, visualisation_env
 class GymKeyDoor(dm_env.Environment):
     """Gym KeyDoor with a `dm_env.Environment` interface."""
 
-    def __init__(self, env_args, env_shape, checkpoint_path):
+    def __init__(self, env_args, train_index, test_index, env_shape, checkpoint_path):
         self._env_shape = env_shape
         self._checkpoint_path = checkpoint_path
         self._rollout_path = os.path.join(self._checkpoint_path, "rollouts")
@@ -20,25 +20,25 @@ class GymKeyDoor(dm_env.Environment):
         self._key_door_env = visualisation_env.VisualisationEnv(self._key_door_env)
         self._start_of_episode = True
 
-        self._train_run_index = 0
-        self._test_run_index = 0
+        self._train_index = train_index
+        self._test_index = test_index
 
     def reset(self, train: bool) -> dm_env.TimeStep:
         """Resets the environment and starts a new episode."""
         if train:
-            if self._train_run_index % 100 == 0 and self._train_run_index != 0:
+            if self._train_index % 100 == 0 and self._train_index != 0:
                 self._key_door_env.visualise_episode_history(
                     os.path.join(
                         self._rollout_path,
-                        f"train_episode_{self._train_run_index}.mp4",
+                        f"train_episode_{self._train_index}.mp4",
                     )
                 )
         else:
-            if self._test_run_index % 100 == 0 and self._test_run_index != 0:
+            if self._test_index % 100 == 0 and self._test_index != 0:
                 self._key_door_env.visualise_episode_history(
                     os.path.join(
                         self._rollout_path,
-                        f"test_episode_{self._test_run_index}.mp4",
+                        f"test_episode_{self._test_index}.mp4",
                     ),
                     history="test",
                 )
@@ -47,9 +47,9 @@ class GymKeyDoor(dm_env.Environment):
         timestep = dm_env.restart((observation, lives))
         self._start_of_episode = False
         if train:
-            self._train_run_index += 1
+            self._train_index += 1
         else:
-            self._test_run_index += 1
+            self._test_index += 1
         return timestep
 
     def step(self, action: np.int32) -> dm_env.TimeStep:
@@ -141,6 +141,14 @@ class GymKeyDoor(dm_env.Environment):
     @property
     def state_space(self) -> List[Tuple[int, int]]:
         return self._key_door_env.state_space
+
+    @property
+    def train_index(self):
+        return self._train_index
+
+    @property
+    def test_index(self):
+        return self._test_index
 
 
 class RandomNoopsEnvironmentWrapper(dm_env.Environment):
@@ -250,3 +258,11 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
     @property
     def state_space(self) -> List[Tuple[int, int]]:
         return self._environment.state_space
+
+    @property
+    def train_index(self):
+        return self._environment.train_index
+
+    @property
+    def test_index(self):
+        return self._environment.test_index
