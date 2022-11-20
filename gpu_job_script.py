@@ -47,4 +47,4 @@ if __name__ == "__main__":
         timeout=args.timeout,
         algo=args.dqn_algorithm,
     )
-    subprocess.call("sbatch script")
+    subprocess.call("sbatch script", shell=True)
