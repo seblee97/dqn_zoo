@@ -64,6 +64,7 @@ flags.DEFINE_bool(
 flags.DEFINE_integer(
     "visualise_values", 1, ""
 )  # iteration interval between value function visualisations
+flags.DEFINE_string("results_path", None, "")  # where to store results
 
 
 def main(argv):
@@ -78,10 +79,13 @@ def main(argv):
     )
 
     # create timestamp for logging and checkpoint path
-    raw_datetime = datetime.datetime.fromtimestamp(time.time())
-    exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
-    exp_path = os.path.join("results", exp_timestamp)
-    os.makedirs(exp_path, exist_ok=True)
+    if FLAGS.results_path is None:
+        raw_datetime = datetime.datetime.fromtimestamp(time.time())
+        exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+        exp_path = os.path.join("results", exp_timestamp)
+        os.makedirs(exp_path, exist_ok=True)
+    else:
+        exp_path = FLAGS.results_path
 
     visualisation_path = os.path.join(exp_path, "visualisations")
     os.makedirs(visualisation_path, exist_ok=True)
