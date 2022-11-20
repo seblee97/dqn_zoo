@@ -44,5 +44,5 @@ if __name__ == "__main__":
         num_gpus=args.num_gpus_per_node,
         mem=args.mem,
         timeout=args.timeout,
-        algo=args.algo,
+        algo=args.dqn_algorithm,
     )
