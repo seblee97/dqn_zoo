@@ -270,8 +270,8 @@ class BootstrappedDqn(parts.Agent):
             v_t = jnp.max(q_t, axis=-1)
             return rng_key, a_t, v_t
 
-        # self._select_action = jax.jit(select_action)
-        self._select_action = select_action
+        self._select_action = jax.jit(select_action)
+        # self._select_action = select_action
 
     def _get_random_mask(self, rng_key):
         return jax.random.choice(
