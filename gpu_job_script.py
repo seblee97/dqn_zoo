@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import os
+import subprocess
 import time
 
 parser = argparse.ArgumentParser()
@@ -46,3 +47,4 @@ if __name__ == "__main__":
         timeout=args.timeout,
         algo=args.dqn_algorithm,
     )
+    subprocess.call("sbatch script")
