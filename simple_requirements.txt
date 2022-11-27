@@ -14,6 +14,7 @@ rlax==0.1.2
 # JAX libraries with GPU support.
 jax==0.3.10
 jaxlib==0.3.10
+# jaxlib @ https://storage.googleapis.com/jax-releases/cuda11/jaxlib-0.3.10%2Bcuda11.cudnn805-cp39-none-manylinux2014_x86_64.whl
 
 # ALE and Gym libraries.
 atari-py==0.2.9
@@ -22,7 +23,7 @@ gym==0.19.0
 # Other explicit dependencies.
 absl-py==1.1.0
 numpy==1.21.5
-Pillow==8.3.1
+# conda Pillow==8.3.1
 python-snappy==0.6.1
 
 # Note: ROM license also needs to be accepted e.g. via pip install "gym[atari,accept-rom-license]"
