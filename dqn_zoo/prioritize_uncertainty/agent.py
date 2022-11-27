@@ -31,7 +31,7 @@ class BootstrappedDqn(parts.Agent):
         variance_network: bool,
         optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
-        replay: replay_lib.TransitionReplay,
+        replay: replay_lib.PrioritizedTransitionReplay,
         shaping,
         mask_probability: float,
         num_heads: int,
