@@ -1,5 +1,5 @@
 
-python -m dqn_zoo.bootstrapped_dqn.run_atari \
+python -m dqn_zoo.prioritize_uncertainty.run_atari \
     --jax_platform_name=gpu \
     --environment_name=pong \
     --replay_capacity=1000 \

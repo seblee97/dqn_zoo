@@ -24,6 +24,8 @@ This is Double DQN with:
 """
 
 # pylint: disable=g-bad-import-order
+import os
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = 'false'
 
 import collections
 import itertools
@@ -132,7 +134,7 @@ def main(argv):
     )
 
   # Create sample network input from sample preprocessor output.
-  sample_processed_timestep = preprocessor_builder()(env.reset())
+  sample_processed_timestep = preprocessor_builder()(env.reset(True))
   sample_processed_timestep = typing.cast(dm_env.TimeStep,
                                           sample_processed_timestep)
   sample_network_input = sample_processed_timestep.observation

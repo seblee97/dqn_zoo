@@ -81,6 +81,7 @@ class BootstrappedDqn(parts.Agent):
         self._action = None
         self._frame_t = -1  # Current frame index.
         self._statistics = {"state_value": np.nan}
+        self._max_seen_priority = 1.
 
         LOG_EPSILON = 0.0001
 
@@ -169,6 +170,7 @@ class BootstrappedDqn(parts.Agent):
             var_online_params,
             var_target_params,
         ):
+            transitions = transitions[0]  # PATH FIXING
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
             d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
@@ -182,7 +184,6 @@ class BootstrappedDqn(parts.Agent):
             new_online_params = optax.apply_updates(online_params, updates)
 
             if variance_network:
-
                 # create identical transition object with meta-reward
                 var_transitions = replay_lib.MaskedTransition(
                     s_tm1=transitions.s_tm1,
@@ -302,7 +303,7 @@ class BootstrappedDqn(parts.Agent):
                     s_t=transition.s_t,
                     mask_t=mask,
                 )
-                self._replay.add(transition)
+                self._replay.add(transition, priority=self._max_seen_priority)
 
         if self._replay.size < self._min_replay_capacity:
             return action, None, None, None

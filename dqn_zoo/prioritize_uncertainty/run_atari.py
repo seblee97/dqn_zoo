@@ -16,7 +16,7 @@ from absl import app, flags, logging
 from dqn_zoo import atari_data, constants, gym_atari, networks, parts, processors
 from dqn_zoo import replay as replay_lib
 from dqn_zoo import shaping
-from dqn_zoo.bootstrapped_dqn import agent
+from dqn_zoo.prioritize_uncertainty import agent
 from jax.config import config
 
 # Relevant flag values are expressed in terms of environment frames.
@@ -53,9 +53,14 @@ flags.DEFINE_integer("learn_period", 16, "")
 flags.DEFINE_string("results_csv_path", "./run_results/results.csv", "")
 flags.DEFINE_string("checkpoint_path", "./run_results/checkpoint.pkl", "")
 
+flags.DEFINE_float('priority_exponent', 0.6, '')
+flags.DEFINE_float('importance_sampling_exponent_begin_value', 0.4, '')
+flags.DEFINE_float('importance_sampling_exponent_end_value', 1., '')
+flags.DEFINE_float('uniform_sample_probability', 1e-3, '')
+flags.DEFINE_bool('normalize_weights', True, '')
 
 def main(argv):
-    """Trains Bootstrapped DQN agent on Atari."""
+    """Trains Bootstrapped DQN agent on Atari with Prioritized replay"""
     del argv
     logging.info(
         "Bootstrapped DQN on Atari on %s.", jax.lib.xla_bridge.get_backend().platform
@@ -129,6 +134,13 @@ def main(argv):
         end_value=FLAGS.exploration_epsilon_end_value,
     )
 
+    importance_sampling_exponent_schedule = parts.LinearSchedule(
+        begin_t=int(FLAGS.min_replay_capacity_fraction * FLAGS.replay_capacity),
+        end_t=(FLAGS.num_iterations *
+               int(FLAGS.num_train_frames / FLAGS.num_action_repeats)),
+        begin_value=FLAGS.importance_sampling_exponent_begin_value,
+        end_value=FLAGS.importance_sampling_exponent_end_value)
+
     if FLAGS.compress_state:
 
         def encoder(transition):
@@ -156,9 +168,10 @@ def main(argv):
         mask_t=None,
     )
 
-    replay = replay_lib.TransitionReplay(
-        FLAGS.replay_capacity, replay_structure, random_state, encoder, decoder
-    )
+    replay = replay_lib.PrioritizedTransitionReplay(
+      FLAGS.replay_capacity, replay_structure, FLAGS.priority_exponent,
+      importance_sampling_exponent_schedule, FLAGS.uniform_sample_probability,
+      FLAGS.normalize_weights, random_state, encoder, decoder)
 
     optimizer = optax.rmsprop(
         learning_rate=FLAGS.learning_rate,
@@ -186,7 +199,7 @@ def main(argv):
         target_network_update_period=FLAGS.target_network_update_period,
         grad_error_bound=FLAGS.grad_error_bound,
         rng_key=train_rng_key,
-        variance_network=False
+        variance_network=True
     )
     eval_agent = parts.EpsilonGreedyActor(
         preprocessor=preprocessor_builder(),
