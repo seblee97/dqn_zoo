@@ -32,7 +32,7 @@ class BootstrappedDqn(parts.Agent):
         optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.TransitionReplay,
-        shaping,
+        learning_rate_computer,
         mask_probability: float,
         num_heads: int,
         batch_size: int,
@@ -95,33 +95,40 @@ class BootstrappedDqn(parts.Agent):
 
         self._forward = jax.jit(_forward)
 
-        def shaping_output(target_params, transitions, rng_key):
-            _, *apply_keys = jax.random.split(rng_key, 3)
-            q_target_t = network.apply(
-                target_params, apply_keys[0], transitions.s_t
-            ).multi_head_output
-            flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
-            # compute shaping function F(s, a, s')
-            shaped_rewards = shaping_function(q_target_t, transitions, apply_keys[1])
-            penalties = shaped_rewards - transitions.r_t
+        # def shaping_output(target_params, transitions, rng_key):
+        #     _, *apply_keys = jax.random.split(rng_key, 3)
+        #     q_target_t = network.apply(
+        #         target_params, apply_keys[0], transitions.s_t
+        #     ).multi_head_output
+        #     flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
+        #     # compute shaping function F(s, a, s')
+        #     shaped_rewards = shaping_function(q_target_t, transitions, apply_keys[1])
+        #     penalties = shaped_rewards - transitions.r_t
 
-            return q_target_t, flattened_q_target, shaped_rewards, penalties
+        #     return q_target_t, flattened_q_target, shaped_rewards, penalties
 
-        def loss_fn(online_params, target_params, transitions, rng_key):
+        def loss_fn(online_params, target_params, transitions, fn, rng_key):
             """Calculates loss given network parameters and transitions."""
             _, *apply_keys = jax.random.split(rng_key, 4)
+
             # Batch : Heads : Actions (source state)
-            q_tm1 = network.apply(
-                online_params, apply_keys[0], transitions.s_tm1
-            ).multi_head_output
+            q_tm1 = fn(
+                network.apply(
+                    online_params, apply_keys[0], transitions.s_tm1
+                ).multi_head_output
+            )
             # Batch : Heads : Actions (destination state)
-            q_t = network.apply(
-                online_params, apply_keys[1], transitions.s_t
-            ).multi_head_output
+            q_t = fn(
+                network.apply(
+                    online_params, apply_keys[1], transitions.s_t
+                ).multi_head_output
+            )
             # Batch : Heads : Actions (destination state, target network)
-            q_target_t = network.apply(
-                target_params, apply_keys[2], transitions.s_t
-            ).multi_head_output
+            q_target_t = fn(
+                network.apply(
+                    target_params, apply_keys[2], transitions.s_t
+                ).multi_head_output
+            )
 
             # Batch x Heads : Actions
             flattened_q = jnp.reshape(q_tm1, (-1, q_tm1.shape[-1]))
@@ -157,7 +164,14 @@ class BootstrappedDqn(parts.Agent):
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = jnp.sum(mask * losses) / jnp.sum(mask)
-            return loss, {"loss": loss, "deltas": raw_td_errors}
+            return loss, {
+                "loss": loss,
+                "deltas": raw_td_errors,
+                "target_output_mean": jnp.mean(flattened_q_target, axis=0),
+                "target_output_variance": jnp.var(flattened_q_target, axis=0),
+                "online_output_mean": jnp.mean(flattened_q, axis=0),
+                "online_output_variance": jnp.var(flattened_q, axis=0),
+            }
 
         def update(
             rng_key,
@@ -175,11 +189,9 @@ class BootstrappedDqn(parts.Agent):
                 online_params,
                 target_params,
                 transitions,
+                lambda x: x,
                 update_key,
             )
-
-            updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
-            new_online_params = optax.apply_updates(online_params, updates)
 
             if variance_network:
 
@@ -198,8 +210,15 @@ class BootstrappedDqn(parts.Agent):
                     var_online_params,
                     var_target_params,
                     var_transitions,
+                    jnp.exp,
                     var_update_key,
                 )
+
+                ada_learning_rate = learning_rate_computer(
+                    expectation_info=aux, variance_info=var_aux
+                )
+                opt_state.hyperparams["learning_rate"] = ada_learning_rate
+                var_opt_state.hyperparams["learning_rate"] = ada_learning_rate
 
                 var_updates, var_new_opt_state = optimizer.update(
                     var_d_loss_d_params, var_opt_state
@@ -210,6 +229,9 @@ class BootstrappedDqn(parts.Agent):
             else:
                 var_new_opt_state = None
                 var_new_online_params = None
+
+            updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
+            new_online_params = optax.apply_updates(online_params, updates)
 
             return (
                 rng_key,
@@ -244,34 +266,38 @@ class BootstrappedDqn(parts.Agent):
             #     penalties,
             # )
 
-        self._update = jax.jit(update)
+        self._update = update
+        # self._update = jax.jit(update)
 
         def select_action(rng_key, network_params, s_t, exploration_epsilon):
             """Samples action from eps-greedy policy wrt Q-values at given state."""
-            rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
+            rng_key, apply_key, var_apply_key, policy_key = jax.random.split(rng_key, 4)
 
             network_forward = network.apply(network_params, apply_key, s_t[None, ...])
             q_t = network_forward.q_values[0]  # average of multi-head output
 
-            # modulate action selection epsilon with uncertainty
-            value_distribution = network_forward.multi_head_output[0]
-            max_indices = jnp.argmax(value_distribution, axis=-1)
-            max_index_probabilities = jnp.bincount(
-                max_indices, minlength=len(q_t), length=len(q_t)
-            ) / len(max_indices)
-            entropy = -jnp.sum(
-                (max_index_probabilities + LOG_EPSILON)
-                * jnp.log(max_index_probabilities + LOG_EPSILON)
+            unexpected_uncertainty = jnp.var(
+                jnp.mean(network_forward.multi_head_output[0], axis=1)
             )
 
-            a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
-                seed=policy_key
-            )
+            # modulate action selection epsilon with uncertainty
+            # value_distribution = network_forward.multi_head_output[0]
+            # max_indices = jnp.argmax(value_distribution, axis=-1)
+            # max_index_probabilities = jnp.bincount(
+            #     max_indices, minlength=len(q_t), length=len(q_t)
+            # ) / len(max_indices)
+            # entropy = -jnp.sum(
+            #     (max_index_probabilities + LOG_EPSILON)
+            #     * jnp.log(max_index_probabilities + LOG_EPSILON)
+            # )
+
+            exploration_beta = 1 / unexpected_uncertainty
+            a_t = distrax.Softmax(q_t, exploration_beta).sample(seed=policy_key)
             v_t = jnp.max(q_t, axis=-1)
             return rng_key, a_t, v_t
 
-        self._select_action = jax.jit(select_action)
-        # self._select_action = select_action
+        # self._select_action = jax.jit(select_action)
+        self._select_action = select_action
 
     def _get_random_mask(self, rng_key):
         return jax.random.choice(
@@ -336,7 +362,10 @@ class BootstrappedDqn(parts.Agent):
         """Selects action given timestep, according to epsilon-greedy policy."""
         s_t = timestep.observation
         self._rng_key, a_t, v_t = self._select_action(
-            self._rng_key, self._online_params, s_t, self.exploration_epsilon
+            self._rng_key,
+            self._online_params,
+            s_t,
+            self.exploration_epsilon,
         )
         a_t, v_t = jax.device_get((a_t, v_t))
         self._statistics["state_value"] = v_t
