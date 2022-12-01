@@ -17,7 +17,6 @@ from jax.config import config
 
 from dqn_zoo import atari_data, constants, gym_key_door, networks, parts, processors
 from dqn_zoo import replay as replay_lib
-from dqn_zoo import shaping
 from dqn_zoo.bootstrapped_dqn import agent
 
 # Relevant flag values are expressed in terms of environment frames.
@@ -203,7 +202,9 @@ def main(argv):
         FLAGS.replay_capacity, replay_structure, random_state, encoder, decoder
     )
 
-    optimizer = optax.rmsprop(
+    # pass extra hyper-params to optax for shaping control, see:
+    # https://github.com/deepmind/optax/discussions/262
+    optimizer = optax.inject_hyperparams(optax.rmsprop)(
         learning_rate=FLAGS.learning_rate,
         decay=0.95,
         eps=FLAGS.optimizer_epsilon,
@@ -220,7 +221,7 @@ def main(argv):
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
-        shaping=shaping.NoPenalty(),
+        learning_rate_computer=parts.DoyaDayuLearningRate(),
         mask_probability=FLAGS.mask_probability,
         num_heads=FLAGS.num_heads,
         batch_size=FLAGS.batch_size,
