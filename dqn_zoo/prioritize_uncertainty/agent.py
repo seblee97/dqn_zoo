@@ -96,18 +96,6 @@ class BootstrappedDqn(parts.Agent):
 
         self._forward = jax.jit(_forward)
 
-        def shaping_output(target_params, transitions, rng_key):
-            _, *apply_keys = jax.random.split(rng_key, 3)
-            q_target_t = network.apply(
-                target_params, apply_keys[0], transitions.s_t
-            ).multi_head_output
-            flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
-            # compute shaping function F(s, a, s')
-            shaped_rewards = shaping_function(q_target_t, transitions, apply_keys[1])
-            penalties = shaped_rewards - transitions.r_t
-
-            return q_target_t, flattened_q_target, shaped_rewards, penalties
-
         def loss_fn(online_params, target_params, transitions, rng_key):
             """Calculates loss given network parameters and transitions."""
             _, *apply_keys = jax.random.split(rng_key, 4)
@@ -158,7 +146,21 @@ class BootstrappedDqn(parts.Agent):
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = jnp.sum(mask * losses) / jnp.sum(mask)
-            return loss, {"loss": loss, "deltas": raw_td_errors}
+
+            # compute ensemble statistics for priority
+            index_fun = jax.vmap(lambda x: x[0][x[1]])
+            selected_q = index_fun([flattened_q, repeated_actions])  # Batch x Heads
+            selected_q = jnp.reshape(selected_q, (-1, q_tm1.shape[1]))  # Batch : Heads
+
+            online_source_value_means = jnp.mean(selected_q, axis=1)
+            online_source_value_vars = jnp.var(selected_q, axis=1)
+
+            return loss, {
+                "loss": loss,
+                "deltas": raw_td_errors,
+                "value_means": online_source_value_means,
+                "value_vars": online_source_value_vars,
+            }
 
         def update(
             rng_key,
