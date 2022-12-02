@@ -220,31 +220,7 @@ class BootstrappedDqn(parts.Agent):
                 var_new_online_params,
             )
 
-            # compute expected uncertainty
-            # use gradient transformation wrapper from optax
-            # max_indices = jnp.argmax(q_target_t, axis=-1)
-            # max_index_probabilities = jnp.array(
-            #     [
-            #         jnp.bincount(mi, minlength=6, length=6) / len(max_indices)
-            #         for mi in max_indices
-            #     ]
-            # )
-            # log_max_index_probabilities = jnp.log(max_index_probabilities + LOG_EPSILON)
-            # expected_unc = jnp.sum(
-            #     (max_index_probabilities + LOG_EPSILON) * log_max_index_probabilities,
-            #     axis=1,
-            # )
-
-            # updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
-            # new_online_params = optax.apply_updates(online_params, updates)
-            # return (
-            #     rng_key,
-            #     new_opt_state,
-            #     new_online_params,
-            #     loss_values,
-            #     penalties,
-            # )
-
+        # self._update = update
         self._update = jax.jit(update)
 
         def select_action(rng_key, network_params, s_t, exploration_epsilon):
@@ -253,17 +229,6 @@ class BootstrappedDqn(parts.Agent):
 
             network_forward = network.apply(network_params, apply_key, s_t[None, ...])
             q_t = network_forward.q_values[0]  # average of multi-head output
-
-            # modulate action selection epsilon with uncertainty
-            value_distribution = network_forward.multi_head_output[0]
-            max_indices = jnp.argmax(value_distribution, axis=-1)
-            max_index_probabilities = jnp.bincount(
-                max_indices, minlength=len(q_t), length=len(q_t)
-            ) / len(max_indices)
-            entropy = -jnp.sum(
-                (max_index_probabilities + LOG_EPSILON)
-                * jnp.log(max_index_probabilities + LOG_EPSILON)
-            )
 
             a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
                 seed=policy_key
@@ -284,9 +249,6 @@ class BootstrappedDqn(parts.Agent):
         self._frame_t += 1
 
         timestep = self._preprocessor(timestep)
-
-        # compute unexpected uncertainty measure
-        unexpected_unc = None
 
         if timestep is None:  # Repeat action.
             action = self._action
