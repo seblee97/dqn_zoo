@@ -20,7 +20,7 @@ _batch_q_learning = jax.vmap(rlax.q_learning)
 _batch_double_q_learning = jax.vmap(rlax.double_q_learning)
 
 
-class BootstrappedDqn(parts.Agent):
+class PrioritizeUncertaintyAgent(parts.Agent):
     """Deep Q-Network agent with multiple heads."""
 
     def __init__(
@@ -158,7 +158,7 @@ class BootstrappedDqn(parts.Agent):
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = jnp.sum(mask * losses) / jnp.sum(mask)
-            return loss, {"loss": loss, "deltas": raw_td_errors}
+            return loss, {"loss": loss, "deltas": clipped_td_errors}
 
         def update(
             rng_key,
@@ -178,7 +178,7 @@ class BootstrappedDqn(parts.Agent):
                 transitions,
                 update_key,
             )
-
+            td_error = aux["deltas"]
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
 
@@ -217,6 +217,7 @@ class BootstrappedDqn(parts.Agent):
                 new_online_params,
                 var_new_opt_state,
                 var_new_online_params,
+                td_error
             )
 
             # compute expected uncertainty
@@ -351,7 +352,8 @@ class BootstrappedDqn(parts.Agent):
             self._opt_state,
             self._online_params,
             self._var_opt_state,
-            self._var_online_params
+            self._var_online_params,
+            td_errors
             # loss_values,
             # shaped_rewards,
             # penalties,
