@@ -150,14 +150,17 @@ class BootstrappedDqn(parts.Agent):
             # compute ensemble statistics for priority
             index_fun = jax.vmap(lambda x: x[0][x[1]])
             selected_q = index_fun([flattened_q, repeated_actions])  # Batch x Heads
-            selected_q = jnp.reshape(selected_q, (-1, q_tm1.shape[1]))  # Batch : Heads
+            selected_q = jnp.reshape(selected_q, (-1, num_heads))  # Batch : Heads
 
             online_source_value_means = jnp.mean(selected_q, axis=1)
             online_source_value_vars = jnp.var(selected_q, axis=1)
 
             return loss, {
                 "loss": loss,
-                "deltas": raw_td_errors,
+                "deltas": clipped_td_errors,
+                "averaged_deltas": jnp.mean(
+                    jnp.reshape(clipped_td_errors, (-1, num_heads)), axis=1
+                ),
                 "value_means": online_source_value_means,
                 "value_vars": online_source_value_vars,
             }
