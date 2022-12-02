@@ -170,7 +170,6 @@ class BootstrappedDqn(parts.Agent):
             var_online_params,
             var_target_params,
         ):
-            transitions = transitions[0]  # PATH FIXING
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
             d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
@@ -345,8 +344,8 @@ class BootstrappedDqn(parts.Agent):
 
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
-        logging.log_first_n(logging.INFO, "Begin learning", 1)
-        transitions = self._replay.sample(self._batch_size)
+        logging.log_first_n(logging.INFO, 'Begin learning', 1)
+        transitions, indices, weights = self._replay.sample(self._batch_size)
         (
             self._rng_key,
             self._opt_state,
@@ -366,6 +365,12 @@ class BootstrappedDqn(parts.Agent):
             self._var_online_params,
             self._var_target_params,
         )
+        chex.assert_equal_shape((weights, td_errors))
+        priorities = jnp.abs(td_errors)
+        priorities = jax.device_get(priorities)
+        max_priority = priorities.max()
+        self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
+        self._replay.update_priorities(indices, priorities)
         # return loss_values.item(), shaped_rewards.tolist(), penalties.tolist()
 
     @property
