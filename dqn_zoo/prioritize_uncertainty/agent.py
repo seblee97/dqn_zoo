@@ -20,7 +20,7 @@ _batch_q_learning = jax.vmap(rlax.q_learning)
 _batch_double_q_learning = jax.vmap(rlax.double_q_learning)
 
 
-class BootstrappedDqn(parts.Agent):
+class PrioritizeUncertaintyAgent(parts.Agent):
     """Deep Q-Network agent with multiple heads."""
 
     def __init__(
@@ -146,7 +146,6 @@ class BootstrappedDqn(parts.Agent):
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = jnp.sum(mask * losses) / jnp.sum(mask)
-
             # compute ensemble statistics for priority
             index_fun = jax.vmap(lambda x: x[0][x[1]])
             selected_q = index_fun([flattened_q, repeated_actions])  # Batch x Heads
@@ -164,7 +163,6 @@ class BootstrappedDqn(parts.Agent):
                 "value_means": online_source_value_means,
                 "value_vars": online_source_value_vars,
             }
-
         def update(
             rng_key,
             opt_state,
@@ -175,7 +173,6 @@ class BootstrappedDqn(parts.Agent):
             var_online_params,
             var_target_params,
         ):
-            transitions = transitions[0]  # PATH FIXING
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
             d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
@@ -184,7 +181,7 @@ class BootstrappedDqn(parts.Agent):
                 transitions,
                 update_key,
             )
-
+            td_error = aux["deltas"]
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
 
@@ -223,6 +220,7 @@ class BootstrappedDqn(parts.Agent):
                 new_online_params,
                 var_new_opt_state,
                 var_new_online_params,
+                td_error
             )
 
         # self._update = update
@@ -312,14 +310,15 @@ class BootstrappedDqn(parts.Agent):
 
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
-        logging.log_first_n(logging.INFO, "Begin learning", 1)
-        transitions = self._replay.sample(self._batch_size)
+        logging.log_first_n(logging.INFO, 'Begin learning', 1)
+        transitions, indices, weights = self._replay.sample(self._batch_size)
         (
             self._rng_key,
             self._opt_state,
             self._online_params,
             self._var_opt_state,
-            self._var_online_params
+            self._var_online_params,
+            td_errors
             # loss_values,
             # shaped_rewards,
             # penalties,
@@ -333,6 +332,12 @@ class BootstrappedDqn(parts.Agent):
             self._var_online_params,
             self._var_target_params,
         )
+        chex.assert_equal_shape((weights, td_errors))
+        priorities = jnp.abs(td_errors)
+        priorities = jax.device_get(priorities)
+        max_priority = priorities.max()
+        self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
+        self._replay.update_priorities(indices, priorities)
         # return loss_values.item(), shaped_rewards.tolist(), penalties.tolist()
 
     @property
