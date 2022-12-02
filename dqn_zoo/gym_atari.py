@@ -68,7 +68,7 @@ class GymAtari(dm_env.Environment):
         self._gym_env.seed(seed)
         self._start_of_episode = True
 
-    def reset(self) -> dm_env.TimeStep:
+    def reset(self, train: bool) -> dm_env.TimeStep:
         """Resets the environment and starts a new episode."""
         observation = self._gym_env.reset()
         lives = np.int32(self._gym_env.ale.lives())
@@ -142,7 +142,7 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
         self._noop_action = noop_action
         self._rng = np.random.RandomState(seed)
 
-    def reset(self):
+    def reset(self, train: bool):
         """Begins new episode.
 
         This method resets the wrapped environment and applies a random number
@@ -158,7 +158,9 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
           RuntimeError: if an episode end occurs while the inner environment
             is being stepped through with the noop action.
         """
-        return self._apply_random_noops(initial_timestep=self._environment.reset())
+        return self._apply_random_noops(
+            initial_timestep=self._environment.reset(train=train)
+        )
 
     def step(self, action):
         """Steps environment given action.
