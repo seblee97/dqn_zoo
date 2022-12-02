@@ -81,7 +81,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
         self._action = None
         self._frame_t = -1  # Current frame index.
         self._statistics = {"state_value": np.nan}
-        self._max_seen_priority = 1.
+        self._max_seen_priority = 1.0
 
         LOG_EPSILON = 0.0001
 
@@ -163,6 +163,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 "value_means": online_source_value_means,
                 "value_vars": online_source_value_vars,
             }
+
         def update(
             rng_key,
             opt_state,
@@ -220,7 +221,8 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 new_online_params,
                 var_new_opt_state,
                 var_new_online_params,
-                td_error
+                aux["loss"],
+                td_error,
             )
 
         # self._update = update
@@ -271,23 +273,17 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 self._replay.add(transition, priority=self._max_seen_priority)
 
         if self._replay.size < self._min_replay_capacity:
-            return action, None, None, None
+            return action, None
 
         if self._frame_t % self._learn_period == 0:
-            # loss, shaped_rewards, penalties = self._learn()
-            self._learn()
-            loss = None
-            shaped_rewards = None
-            penalties = None
+            loss = self._learn()
         else:
             loss = None
-            shaped_rewards = None
-            penalties = None
 
         if self._frame_t % self._target_network_update_period == 0:
             self._target_params = self._online_params
 
-        return action, loss, shaped_rewards, penalties
+        return action, loss
 
     def reset(self) -> None:
         """Resets the agent's episodic state such as frame stack and action repeat.
@@ -310,7 +306,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
 
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
-        logging.log_first_n(logging.INFO, 'Begin learning', 1)
+        logging.log_first_n(logging.INFO, "Begin learning", 1)
         transitions, indices, weights = self._replay.sample(self._batch_size)
         (
             self._rng_key,
@@ -318,10 +314,8 @@ class PrioritizeUncertaintyAgent(parts.Agent):
             self._online_params,
             self._var_opt_state,
             self._var_online_params,
-            td_errors
-            # loss_values,
-            # shaped_rewards,
-            # penalties,
+            loss_values,
+            td_errors,
         ) = self._update(
             self._rng_key,
             self._opt_state,
@@ -338,7 +332,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
         max_priority = priorities.max()
         self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
         self._replay.update_priorities(indices, priorities)
-        # return loss_values.item(), shaped_rewards.tolist(), penalties.tolist()
+        return loss_values.item()
 
     @property
     def online_params(self) -> parts.NetworkParams:
