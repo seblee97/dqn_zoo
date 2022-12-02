@@ -108,7 +108,7 @@ def run_loop(
         timestep_t = environment.reset(train=train)  # timestep_0.
 
         while True:  # For each step in the current episode.
-            a_t = agent.step(timestep_t)
+            a_t, _ = agent.step(timestep_t)
             yield environment, timestep_t, agent, a_t
 
             # Update t after one environment step and agent step and relabel.
@@ -121,7 +121,9 @@ def run_loop(
                 timestep_t = timestep_t._replace(step_type=dm_env.StepType.LAST)
 
             if timestep_t.last():
-                unused_a_t = agent.step(timestep_t)  # Extra agent step, action ignored.
+                unused_a_t, _ = agent.step(
+                    timestep_t
+                )  # Extra agent step, action ignored.
                 yield environment, timestep_t, agent, None
                 break
 
@@ -387,14 +389,14 @@ class EpsilonGreedyActor(Agent):
         timestep = self._preprocessor(timestep)
 
         if timestep is None:  # Repeat action.
-            return self._action, None, None, None
+            return self._action, None
 
         s_t = timestep.observation
         self._rng_key, a_t = self._select_action(
             self._rng_key, self.network_params, s_t
         )
         self._action = Action(jax.device_get(a_t))
-        return self._action, None, None, None
+        return self._action, None
 
     def reset(self) -> None:
         """Resets the agent's episodic state such as frame stack and action repeat.
