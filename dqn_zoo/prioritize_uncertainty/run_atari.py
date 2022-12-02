@@ -1,9 +1,13 @@
 import os
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = 'false'
+
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
 import collections
+import datetime
 import itertools
+import os
 import sys
+import time
 import typing
 
 import chex
@@ -13,11 +17,12 @@ import jax
 import numpy as np
 import optax
 from absl import app, flags, logging
+from jax.config import config
+
 from dqn_zoo import atari_data, constants, gym_atari, networks, parts, processors
 from dqn_zoo import replay as replay_lib
 from dqn_zoo import shaping
 from dqn_zoo.prioritize_uncertainty import agent
-from jax.config import config
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
@@ -50,14 +55,16 @@ flags.DEFINE_integer("num_iterations", 200, "")
 flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
 flags.DEFINE_integer("num_eval_frames", int(5e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
-flags.DEFINE_string("results_csv_path", "./run_results/results.csv", "")
-flags.DEFINE_string("checkpoint_path", "./run_results/checkpoint.pkl", "")
+# flags.DEFINE_string("results_csv_path", "./run_results/results.csv", "")
+# flags.DEFINE_string("checkpoint_path", "./run_results/checkpoint.pkl", "")
+flags.DEFINE_string("results_path", None, "")  # where to store results
 
-flags.DEFINE_float('priority_exponent', 0.6, '')
-flags.DEFINE_float('importance_sampling_exponent_begin_value', 0.4, '')
-flags.DEFINE_float('importance_sampling_exponent_end_value', 1., '')
-flags.DEFINE_float('uniform_sample_probability', 1e-3, '')
-flags.DEFINE_bool('normalize_weights', True, '')
+flags.DEFINE_float("priority_exponent", 0.6, "")
+flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
+flags.DEFINE_float("importance_sampling_exponent_end_value", 1.0, "")
+flags.DEFINE_float("uniform_sample_probability", 1e-3, "")
+flags.DEFINE_bool("normalize_weights", True, "")
+
 
 def main(argv):
     """Trains Bootstrapped DQN agent on Atari with Prioritized replay"""
@@ -70,10 +77,14 @@ def main(argv):
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1)
     )
 
-    if FLAGS.results_csv_path:
-        writer = parts.CsvWriter(FLAGS.results_csv_path)
+    # create timestamp for logging and checkpoint path
+    if FLAGS.results_path is None:
+        raw_datetime = datetime.datetime.fromtimestamp(time.time())
+        exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+        exp_path = os.path.join("results", exp_timestamp)
+        os.makedirs(exp_path, exist_ok=True)
     else:
-        writer = parts.NullWriter()
+        exp_path = FLAGS.results_path
 
     def environment_builder():
         """Creates Atari environment."""
@@ -136,10 +147,13 @@ def main(argv):
 
     importance_sampling_exponent_schedule = parts.LinearSchedule(
         begin_t=int(FLAGS.min_replay_capacity_fraction * FLAGS.replay_capacity),
-        end_t=(FLAGS.num_iterations *
-               int(FLAGS.num_train_frames / FLAGS.num_action_repeats)),
+        end_t=(
+            FLAGS.num_iterations
+            * int(FLAGS.num_train_frames / FLAGS.num_action_repeats)
+        ),
         begin_value=FLAGS.importance_sampling_exponent_begin_value,
-        end_value=FLAGS.importance_sampling_exponent_end_value)
+        end_value=FLAGS.importance_sampling_exponent_end_value,
+    )
 
     if FLAGS.compress_state:
 
@@ -169,9 +183,16 @@ def main(argv):
     )
 
     replay = replay_lib.PrioritizedTransitionReplay(
-      FLAGS.replay_capacity, replay_structure, FLAGS.priority_exponent,
-      importance_sampling_exponent_schedule, FLAGS.uniform_sample_probability,
-      FLAGS.normalize_weights, random_state, encoder, decoder)
+        FLAGS.replay_capacity,
+        replay_structure,
+        FLAGS.priority_exponent,
+        importance_sampling_exponent_schedule,
+        FLAGS.uniform_sample_probability,
+        FLAGS.normalize_weights,
+        random_state,
+        encoder,
+        decoder,
+    )
 
     optimizer = optax.rmsprop(
         learning_rate=FLAGS.learning_rate,
@@ -199,7 +220,7 @@ def main(argv):
         target_network_update_period=FLAGS.target_network_update_period,
         grad_error_bound=FLAGS.grad_error_bound,
         rng_key=train_rng_key,
-        variance_network=True
+        variance_network=True,
     )
     eval_agent = parts.EpsilonGreedyActor(
         preprocessor=preprocessor_builder(),
@@ -208,9 +229,13 @@ def main(argv):
         rng_key=eval_rng_key,
     )
 
-    # Set up checkpointing.
-    # checkpoint = parts.NullCheckpoint()
-    checkpoint = parts.ImplementedCheckpoint(checkpoint_path=FLAGS.checkpoint_path)
+    # setup writer
+    writer = parts.CsvWriter(os.path.join(exp_path, "writer.csv"))
+
+    # setup checkpointing.
+    checkpoint = parts.ImplementedCheckpoint(
+        checkpoint_path=os.path.join(exp_path, "checkpoint.pkl")
+    )
 
     if checkpoint.can_be_restored():
         checkpoint.restore()
