@@ -181,7 +181,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 transitions,
                 update_key,
             )
-            td_error = aux["deltas"]
+            td_error = aux["averaged_deltas"]
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
 
