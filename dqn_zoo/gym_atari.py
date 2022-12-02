@@ -68,7 +68,7 @@ class GymAtari(dm_env.Environment):
         self._gym_env.seed(seed)
         self._start_of_episode = True
 
-    def reset(self, train: bool) -> dm_env.TimeStep:
+    def reset(self) -> dm_env.TimeStep:
         """Resets the environment and starts a new episode."""
         observation = self._gym_env.reset()
         lives = np.int32(self._gym_env.ale.lives())
