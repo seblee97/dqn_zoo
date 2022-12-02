@@ -182,7 +182,7 @@ def main(argv):
 
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
-    train_agent = agent.BootstrappedDqn(
+    train_agent = agent.PrioritizeUncertaintyAgent(
         preprocessor=preprocessor_builder(),
         sample_network_input=sample_network_input,
         network=network,
