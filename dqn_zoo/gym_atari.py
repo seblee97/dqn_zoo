@@ -142,7 +142,7 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
         self._noop_action = noop_action
         self._rng = np.random.RandomState(seed)
 
-    def reset(self, train: bool):
+    def reset(self):
         """Begins new episode.
 
         This method resets the wrapped environment and applies a random number
@@ -158,9 +158,7 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
           RuntimeError: if an episode end occurs while the inner environment
             is being stepped through with the noop action.
         """
-        return self._apply_random_noops(
-            initial_timestep=self._environment.reset(train=train)
-        )
+        return self._apply_random_noops(initial_timestep=self._environment.reset())
 
     def step(self, action):
         """Steps environment given action.
