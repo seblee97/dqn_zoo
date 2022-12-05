@@ -273,7 +273,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 self._replay.add(transition, priority=self._max_seen_priority)
 
         if self._replay.size < self._min_replay_capacity:
-            return action, None
+            return action, {}
 
         if self._frame_t % self._learn_period == 0:
             loss = self._learn()
@@ -283,7 +283,9 @@ class PrioritizeUncertaintyAgent(parts.Agent):
         if self._frame_t % self._target_network_update_period == 0:
             self._target_params = self._online_params
 
-        return action, loss
+        aux = {"loss": loss}
+
+        return action, aux
 
     def reset(self) -> None:
         """Resets the agent's episodic state such as frame stack and action repeat.
