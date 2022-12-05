@@ -27,7 +27,7 @@ try:
 except ModuleNotFoundError:
     import pickle
 
-from typing import Any, Iterable, Mapping, Optional, Text, Tuple, Union
+from typing import Any, Dict, Iterable, Mapping, Optional, Text, Tuple, Union
 
 import distrax
 import dm_env
@@ -108,8 +108,8 @@ def run_loop(
         timestep_t = environment.reset(train=train)  # timestep_0.
 
         while True:  # For each step in the current episode.
-            a_t, _ = agent.step(timestep_t)
-            yield environment, timestep_t, agent, a_t
+            a_t, aux = agent.step(timestep_t)
+            yield environment, timestep_t, agent, a_t, aux
 
             # Update t after one environment step and agent step and relabel.
             t += 1
@@ -121,10 +121,8 @@ def run_loop(
                 timestep_t = timestep_t._replace(step_type=dm_env.StepType.LAST)
 
             if timestep_t.last():
-                unused_a_t, _ = agent.step(
-                    timestep_t
-                )  # Extra agent step, action ignored.
-                yield environment, timestep_t, agent, None
+                _, aux = agent.step(timestep_t)  # Extra agent step, action ignored.
+                yield environment, timestep_t, agent, None, aux
                 break
 
 
@@ -139,9 +137,9 @@ def generate_statistics(
     for tracker in trackers:
         tracker.reset()
 
-    for environment, timestep_t, agent, a_t in timestep_action_sequence:
+    for environment, timestep_t, agent, a_t, aux in timestep_action_sequence:
         for tracker in trackers:
-            tracker.step(environment, timestep_t, agent, a_t)
+            tracker.step(environment, timestep_t, agent, a_t, aux)
 
     # Merge all statistics dictionaries into one.
     statistics_dicts = (tracker.get() for tracker in trackers)
@@ -157,9 +155,9 @@ class EpisodeTracker:
         self._episode_returns = None
         self._current_episode_rewards = None
         self._current_episode_step = None
-        self._current_episode_shaped_rewards = None
+
+        self._episode_losses = None
         self._current_episode_loss = None
-        self._current_episode_penalties = None
 
     def step(
         self,
@@ -167,6 +165,7 @@ class EpisodeTracker:
         timestep_t: dm_env.TimeStep,
         agent: Optional[Agent],
         a_t: Optional[Action],
+        aux: Optional[Dict],
     ) -> None:
         """Accumulates statistics from timestep."""
         del (environment, agent, a_t)
@@ -180,19 +179,8 @@ class EpisodeTracker:
             # First reward is invalid, all other rewards are appended.
             self._current_episode_rewards.append(timestep_t.reward)
 
-        # if shaped_reward is not None:
-        #   if isinstance(shaped_reward, list):
-        #     self._current_episode_shaped_rewards.extend(shaped_reward)
-        #   else:
-        #     self._current_episode_shaped_rewards.append(shaped_reward)
-        # if loss is not None:
-        #   self._current_episode_loss += loss
-
-        # if penalties is not None:
-        #   if isinstance(penalties, list):
-        #     self._current_episode_penalties.extend(penalties)
-        #   else:
-        #     self._current_episode_penalties.append(penalties)
+            loss = aux.get("loss") or np.nan
+            self._current_episode_loss += loss
 
         self._num_steps_since_reset += 1
         self._current_episode_step += 1
@@ -200,22 +188,22 @@ class EpisodeTracker:
         if timestep_t.last():
             self._episode_returns.append(sum(self._current_episode_rewards))
             self._current_episode_rewards = []
-            self._current_episode_shaped_rewards = []
-            self._current_episode_penalties = []
-            self._current_episode_loss = 0
             self._num_steps_over_episodes += self._current_episode_step
             self._current_episode_step = 0
+
+            self._episode_losses.append(self._current_episode_loss)
+            self._current_episode_loss = 0
 
     def reset(self) -> None:
         """Resets all gathered statistics, not to be called between episodes."""
         self._num_steps_since_reset = 0
         self._num_steps_over_episodes = 0
         self._episode_returns = []
-        self._current_episode_shaped_rewards = []
-        self._current_episode_penalties = []
-        self._current_episode_loss = 0
-        self._current_episode_step = 0
         self._current_episode_rewards = []
+        self._current_episode_step = 0
+
+        self._episode_losses = []
+        self._current_episode_loss = 0
 
     def get(self) -> Mapping[Text, Union[int, float, None]]:
         """Aggregates statistics and returns as a dictionary.
@@ -232,36 +220,30 @@ class EpisodeTracker:
             mean_episode_return = np.array(self._episode_returns).mean()
             current_episode_return = sum(self._current_episode_rewards)
             episode_return = mean_episode_return
+
+            mean_episode_losses = np.array(self._episode_losses).mean()
+            current_episode_loss = self._current_episode_loss
+            episode_loss = mean_episode_losses
         else:
             mean_episode_return = np.nan
             if self._num_steps_since_reset > 0:
                 current_episode_return = sum(self._current_episode_rewards)
+                current_episode_loss = self._current_episode_loss
             else:
                 current_episode_return = np.nan
+                current_episode_loss = np.nan
             episode_return = current_episode_return
-
-        if [i for i in self._current_episode_shaped_rewards if i]:
-            mean_episode_shaped_reward = np.array(
-                self._current_episode_shaped_rewards
-            ).mean()
-            mean_episode_penalties = np.array(self._current_episode_penalties).mean()
-            current_episode_loss = self._current_episode_loss
-        else:
-            mean_episode_shaped_reward = np.nan
-            mean_episode_penalties = np.nan
-            current_episode_loss = np.nan
+            episode_loss = current_episode_loss
 
         return {
             "mean_episode_return": mean_episode_return,
             "current_episode_return": current_episode_return,
-            "shaped_reward": mean_episode_shaped_reward,
-            "penalties": mean_episode_penalties,
-            "train_loss": current_episode_loss,
             "episode_return": episode_return,
             "num_episodes": len(self._episode_returns),
             "num_steps_over_episodes": self._num_steps_over_episodes,
             "current_episode_step": self._current_episode_step,
             "num_steps_since_reset": self._num_steps_since_reset,
+            "train_loss": episode_loss,
         }
 
 
@@ -278,6 +260,7 @@ class StepRateTracker:
         timestep_t: Optional[dm_env.TimeStep],
         agent: Optional[Agent],
         a_t: Optional[Action],
+        aux: Optional[Dict],
     ) -> None:
         del (environment, timestep_t, agent, a_t)
         self._num_steps_since_reset += 1
@@ -314,6 +297,7 @@ class UnbiasedExponentialWeightedAverageAgentTracker:
         timestep_t: Optional[dm_env.TimeStep],
         agent: Agent,
         a_t: Optional[Action],
+        aux: Optional[Dict],
     ) -> None:
         """Accumulates agent statistics."""
         del (environment, timestep_t, a_t)
@@ -389,14 +373,14 @@ class EpsilonGreedyActor(Agent):
         timestep = self._preprocessor(timestep)
 
         if timestep is None:  # Repeat action.
-            return self._action, None
+            return self._action, {}
 
         s_t = timestep.observation
         self._rng_key, a_t = self._select_action(
             self._rng_key, self.network_params, s_t
         )
         self._action = Action(jax.device_get(a_t))
-        return self._action, None
+        return self._action, {}
 
     def reset(self) -> None:
         """Resets the agent's episodic state such as frame stack and action repeat.
