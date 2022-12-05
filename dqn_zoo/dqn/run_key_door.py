@@ -21,8 +21,11 @@ http://www.nature.com/articles/nature14236.
 # pylint: disable=g-bad-import-order
 
 import collections
+import datetime
 import itertools
+import os
 import sys
+import time
 import typing
 
 import chex
@@ -32,10 +35,11 @@ import jax
 import numpy as np
 import optax
 from absl import app, flags, logging
+from jax.config import config
+
 from dqn_zoo import atari_data, constants, gym_key_door, networks, parts, processors
 from dqn_zoo import replay as replay_lib
 from dqn_zoo.dqn import agent
-from jax.config import config
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
@@ -77,6 +81,7 @@ flags.DEFINE_string(
 )
 flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
+flags.DEFINE_string("results_path", None, "")  # where to store results
 
 
 def main(argv):
@@ -87,6 +92,18 @@ def main(argv):
     rng_key = jax.random.PRNGKey(
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
     )
+
+    # create timestamp for logging and checkpoint path
+    if FLAGS.results_path is None:
+        raw_datetime = datetime.datetime.fromtimestamp(time.time())
+        exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+        exp_path = os.path.join("results", exp_timestamp)
+        os.makedirs(exp_path, exist_ok=True)
+    else:
+        exp_path = FLAGS.results_path
+
+    visualisation_path = os.path.join(exp_path, "visualisations")
+    os.makedirs(visualisation_path, exist_ok=True)
 
     def environment_builder():
         """Creates Key-Door environment."""
