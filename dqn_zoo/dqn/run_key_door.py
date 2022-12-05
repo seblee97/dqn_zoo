@@ -73,12 +73,8 @@ flags.DEFINE_integer("num_eval_frames", int(5e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 # flags.DEFINE_string("checkpoint_path", "/tmp/checkpoint.pkl", "")
-flags.DEFINE_string(
-    "map_ascii_path", "dqn_zoo/key_door_maps/bandit_posner_maze.txt", ""
-)
-flags.DEFINE_string(
-    "map_yaml_path", "dqn_zoo/key_door_maps/bandit_posner_maze.yaml", ""
-)
+flags.DEFINE_string("map_ascii_path", "dqn_zoo/key_door_maps/multi_room_bandit.txt", "")
+flags.DEFINE_string("map_yaml_path", "dqn_zoo/key_door_maps/multi_room_bandit.yaml", "")
 flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 flags.DEFINE_string("results_path", None, "")  # where to store results
