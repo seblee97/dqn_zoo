@@ -18,6 +18,7 @@ from dqn_zoo import replay as replay_lib
 # Batch variant of q_learning.
 _batch_q_learning = jax.vmap(rlax.q_learning)
 _batch_double_q_learning = jax.vmap(rlax.double_q_learning)
+_batch_expected_sarsa = jax.vmap(rlax.expected_sarsa)
 
 
 class PrioritizeUncertaintyAgent(parts.Agent):
@@ -136,6 +137,16 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 flattened_q_t,
             )
 
+            # Different delta for variance network
+            variance_td_errors = _batch_expected_sarsa(
+                flattened_q,
+                repeated_actions,
+                repeated_rewards,
+                repeated_discounts,
+                flattened_q_target,
+                flattened_q_t
+            )
+
             clipped_td_errors = rlax.clip_gradient(
                 raw_td_errors,
                 -grad_error_bound / num_heads,
@@ -160,9 +171,13 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 "averaged_deltas": jnp.mean(
                     jnp.reshape(clipped_td_errors, (-1, num_heads)), axis=1
                 ),
+                "variance_deltas": jnp.mean(
+                    jnp.reshape(variance_td_errors, (-1, num_heads)), axis=1
+                ),
                 "value_means": online_source_value_means,
                 "value_vars": online_source_value_vars,
             }
+
         def update(
             rng_key,
             opt_state,
@@ -190,7 +205,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 var_transitions = replay_lib.MaskedTransition(
                     s_tm1=transitions.s_tm1,
                     a_tm1=transitions.a_tm1,
-                    r_t=aux["deltas"] ** 2,
+                    r_t=aux["variance_deltas"] ** 2,
                     discount_t=transitions.discount_t**2,
                     s_t=transitions.s_t,
                     mask_t=transitions.mask_t,
