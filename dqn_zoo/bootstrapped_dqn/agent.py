@@ -217,6 +217,7 @@ class BootstrappedDqn(parts.Agent):
                 new_online_params,
                 var_new_opt_state,
                 var_new_online_params,
+                aux,
             )
 
             # compute expected uncertainty
@@ -305,23 +306,17 @@ class BootstrappedDqn(parts.Agent):
                 self._replay.add(transition)
 
         if self._replay.size < self._min_replay_capacity:
-            return action, None, None, None
+            return action, {}
 
         if self._frame_t % self._learn_period == 0:
-            # loss, shaped_rewards, penalties = self._learn()
-            self._learn()
-            loss = None
-            shaped_rewards = None
-            penalties = None
+            aux = self._learn()
         else:
-            loss = None
-            shaped_rewards = None
-            penalties = None
+            aux = {}
 
         if self._frame_t % self._target_network_update_period == 0:
             self._target_params = self._online_params
 
-        return action, loss, shaped_rewards, penalties
+        return action, aux
 
     def reset(self) -> None:
         """Resets the agent's episodic state such as frame stack and action repeat.
@@ -351,10 +346,8 @@ class BootstrappedDqn(parts.Agent):
             self._opt_state,
             self._online_params,
             self._var_opt_state,
-            self._var_online_params
-            # loss_values,
-            # shaped_rewards,
-            # penalties,
+            self._var_online_params,
+            aux,
         ) = self._update(
             self._rng_key,
             self._opt_state,
@@ -365,7 +358,7 @@ class BootstrappedDqn(parts.Agent):
             self._var_online_params,
             self._var_target_params,
         )
-        # return loss_values.item(), shaped_rewards.tolist(), penalties.tolist()
+        return aux
 
     @property
     def online_params(self) -> parts.NetworkParams:
