@@ -121,8 +121,8 @@ def main(argv):
         )
         return gym_key_door.RandomNoopsEnvironmentWrapper(
             env,
-            min_noop_steps=1,
-            max_noop_steps=30,
+            min_noop_steps=0,
+            max_noop_steps=0,
             seed=random_state.randint(1, 2**32),
         )
 
