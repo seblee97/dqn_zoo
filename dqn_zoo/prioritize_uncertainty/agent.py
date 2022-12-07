@@ -144,7 +144,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 repeated_rewards,
                 repeated_discounts,
                 flattened_q_target,
-                flattened_q_t
+                flattened_q_t,
             )
 
             clipped_td_errors = rlax.clip_gradient(
@@ -235,8 +235,8 @@ class PrioritizeUncertaintyAgent(parts.Agent):
                 new_online_params,
                 var_new_opt_state,
                 var_new_online_params,
-                aux["loss"],
                 td_error,
+                aux,
             )
 
         # self._update = update
@@ -290,14 +290,12 @@ class PrioritizeUncertaintyAgent(parts.Agent):
             return action, {}
 
         if self._frame_t % self._learn_period == 0:
-            loss = self._learn()
+            aux = self._learn()
         else:
-            loss = None
+            aux = {}
 
         if self._frame_t % self._target_network_update_period == 0:
             self._target_params = self._online_params
-
-        aux = {"loss": loss}
 
         return action, aux
 
@@ -330,8 +328,8 @@ class PrioritizeUncertaintyAgent(parts.Agent):
             self._online_params,
             self._var_opt_state,
             self._var_online_params,
-            loss_values,
             td_errors,
+            aux,
         ) = self._update(
             self._rng_key,
             self._opt_state,
@@ -348,7 +346,7 @@ class PrioritizeUncertaintyAgent(parts.Agent):
         max_priority = priorities.max()
         self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
         self._replay.update_priorities(indices, priorities)
-        return loss_values.item()
+        return aux
 
     @property
     def online_params(self) -> parts.NetworkParams:
