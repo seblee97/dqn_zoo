@@ -9,6 +9,8 @@ key_2_positions:
     - [2, 2]
     - [6, 2]
     - [10, 2]
+
+correct_keys: [0, 0, 0]
     
 # hard code correspondence between position (above) and color;
 # only used in case where BOTH correct_keys_change and keys_change_color are False.
