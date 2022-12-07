@@ -167,7 +167,7 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
         environment: dm_env.Environment,
         max_noop_steps: int,
         min_noop_steps: int = 0,
-        noop_action: int = 0,
+        noop_action: int = None,
         seed: Optional[int] = None,
     ):
         """Initializes the random noops environment wrapper."""
