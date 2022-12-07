@@ -243,12 +243,6 @@ def main(argv):
         rng_key=eval_rng_key,
     )
 
-    # create timestamp for logging and checkpoint path
-    raw_datetime = datetime.datetime.fromtimestamp(time.time())
-    exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
-    exp_path = os.path.join("results", exp_timestamp)
-    os.makedirs(exp_path, exist_ok=True)
-
     # setup writer
     writer = parts.CsvWriter(os.path.join(exp_path, "writer.csv"))
 
