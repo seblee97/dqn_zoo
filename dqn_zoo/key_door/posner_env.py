@@ -108,10 +108,11 @@ class PosnerEnv(base_environment.BaseEnvironment):
             gold_key_positions,
             self._key_1_positions,
             self._key_2_positions,
+            self._correct_keys,
             self._keys_change_color,
             self._correct_keys_change,
             self._door_positions,
-            reward_positions,
+            self._reward_positions,
             reward_statistics,
             self._cue_specification,
         ) = utils.parse_posner_map_positions(map_yaml_path)
@@ -143,11 +144,11 @@ class PosnerEnv(base_environment.BaseEnvironment):
         )
 
         self._rewards = utils.setup_reward_statistics(
-            reward_positions, reward_statistics
+            self._reward_positions, reward_statistics
         )
 
         self._total_rewards = len(self._rewards)
-        self._accessible_rewards = len(self._rewards)
+        self._inaccessible_rewards = []
 
         if not self._keys_change_color and not self._correct_keys_change:
             # here reward_by = color and reward_by = position are equivalent
@@ -156,7 +157,10 @@ class PosnerEnv(base_environment.BaseEnvironment):
         if self._correct_keys_change:
             pass
         else:
-            self._correct_keys = self._random_correct_keys()
+            if self._correct_keys is None:
+                self._correct_keys = utils.random_correct_keys(
+                    num_keys=self._total_rewards
+                )
             if self._reward_by == constants.COLOR:
                 if self._keys_change_color:
                     # this should never be since then correct_keys_change should be True
@@ -202,13 +206,8 @@ class PosnerEnv(base_environment.BaseEnvironment):
             map_outline=self._map,
             key_1_positions=self._key_1_positions,
             key_2_positions=self._key_2_positions,
-            reward_positions=reward_positions,
+            reward_positions=self._reward_positions,
         )
-
-    def _random_correct_keys(self):
-        """Returns list of length total_rewards (equivalently number of each key)
-        such that each index is 0 or 1 with equal probability."""
-        return [0 if s < 0.5 else 1 for s in np.random.random(size=self._total_rewards)]
 
     def _default_color_indices(self):
         self._silver_key_indices = []
@@ -351,34 +350,34 @@ class PosnerEnv(base_environment.BaseEnvironment):
         if rewards is not None:
             if isinstance(rewards, str):
                 if rewards == constants.STATIONARY:
-                    reward_iterate = list(self._rewards.keys())
+                    reward_iterate = self._reward_positions
                 elif rewards == constants.STATE:
-                    reward_positions = list(self._rewards.keys())
 
-                    wrong_keys_collected = []
-                    for i, k in enumerate(self._correct_keys):
-                        if k == 0 and self._keys_2_state[i]:
-                            wrong_keys_collected.append(True)
-                        elif k == 1 and self._keys_1_state[i]:
-                            wrong_keys_collected.append(True)
-                        else:
-                            wrong_keys_collected.append(False)
+                    # wrong_keys_collected = []
+                    # for i, k in enumerate(self._correct_keys):
+                    #     if k == 0 and self._keys_2_state[i]:
+                    #         wrong_keys_collected.append(True)
+                    #     elif k == 1 and self._keys_1_state[i]:
+                    #         wrong_keys_collected.append(True)
+                    #     else:
+                    #         wrong_keys_collected.append(False)
 
-                    self._accessible_rewards = len(self._rewards) - sum(
-                        wrong_keys_collected
-                    )
+                    wrong_keys_1 = self._keys_1_state * self._correct_keys
+                    wrong_keys_2 = (
+                        self._keys_2_state - self._correct_keys == 1
+                    ).astype(int)
+                    wrong_keys_collected = wrong_keys_1 + wrong_keys_2
 
                     reward_iterate = [
-                        reward_positions[i]
+                        self._reward_positions[i]
                         for i, r in enumerate(self._rewards_state)
                         if not r and not wrong_keys_collected[i]
                     ]
                 else:
                     raise ValueError(f"Rewards keyword {rewards} not identified.")
             elif isinstance(rewards, tuple):
-                reward_positions = list(self._rewards.keys())
                 reward_iterate = [
-                    reward_positions[i] for i, r in enumerate(rewards) if not r
+                    self._reward_positions[i] for i, r in enumerate(rewards) if not r
                 ]
             else:
                 raise ValueError(
@@ -633,46 +632,62 @@ class PosnerEnv(base_environment.BaseEnvironment):
 
         if key_1_index is not None:
             key_index = key_1_index
+            # if neither key has been collected yet in this room
             if (
                 not self._keys_1_state[key_1_index]
                 and not self._keys_2_state[key_1_index]
             ):
+                # change key 1 state to indicate collection
                 self._keys_1_state[key_1_index] = 1
                 if self._cue_format is not None:
+                    # update cue
                     self._current_cue = next(self._cues)
                 if key_1_index in self._silver_key_1s:
+                    # if key is silver
                     silver_key_collected = True
                 else:
+                    # if key is gold
                     gold_key_collected = True
+                if self._correct_keys[key_1_index] == 1:
+                    # wrong key collected
+                    next_reward_pos = self._reward_positions[key_1_index]
+                    self._inaccessible_rewards.append(next_reward_pos)
+                    self._rolling_env_skeleton[next_reward_pos[::-1]] = self.WHITE_RGB
 
         if key_2_index is not None:
             key_index = key_2_index
+            # if neither key has been collected yet in this room
             if (
                 not self._keys_2_state[key_2_index]
                 and not self._keys_1_state[key_2_index]
             ):
+                # change key 2 state to indicate collection
                 self._keys_2_state[key_2_index] = 1
                 if self._cue_format is not None:
+                    # update cue
                     self._current_cue = next(self._cues)
                 if key_2_index in self._silver_key_2s:
+                    # if key is silver
                     silver_key_collected = True
                 else:
+                    # if key is gold
                     gold_key_collected = True
+                if self._correct_keys[key_2_index] == 0:
+                    # wrong key collected
+                    next_reward_pos = self._reward_positions[key_2_index]
+                    self._inaccessible_rewards.append(next_reward_pos)
+                    self._rolling_env_skeleton[next_reward_pos[::-1]] = self.WHITE_RGB
 
         if silver_key_collected:
             self._silver_keys_state[key_index] = 1
             # silver key collected, remove gold key from rolling_env_skeleton
             gold_key_pos = self._gold_key_positions[key_index]
             self._rolling_env_skeleton[tuple(gold_key_pos[::-1])] = self.WHITE_RGB
-            # if key_index not in self._silver_key_indices:
-            #     self._accessible_rewards -= 1
         elif gold_key_collected:
             self._gold_keys_state[key_index] = 1
             # gold key collected, remove silver key from rolling_env_skeleton
             silver_key_pos = self._silver_key_positions[key_index]
             self._rolling_env_skeleton[tuple(silver_key_pos[::-1])] = self.WHITE_RGB
-            # if key_index not in self._gold_key_indices:
-            #     self._accessible_rewards -= 1
 
         return self._compute_reward()
 
@@ -692,8 +707,6 @@ class PosnerEnv(base_environment.BaseEnvironment):
         assert (
             action in self.ACTION_SPACE
         ), f"Action given as {action}; must be 0: left, 1: up, 2: right or 3: down."
-
-        # print(action)
 
         reward = self._move_agent(delta=self.DELTAS[action])
         new_state = self.get_state_representation()
@@ -733,16 +746,16 @@ class PosnerEnv(base_environment.BaseEnvironment):
         """Check for reward, i.e. whether agent position is equal to a reward position.
         If reward is found, add to rewards received log.
         """
+        reward = 0.0
         if (
             tuple(self._agent_position) in self._rewards
             and tuple(self._agent_position) not in self._rewards_received
+            and tuple(self._agent_position) not in self._inaccessible_rewards
         ):
-            reward = self._rewards.get(tuple(self._agent_position))()
-            reward_index = list(self._rewards.keys()).index(tuple(self._agent_position))
+            reward += self._rewards.get(tuple(self._agent_position))()
+            reward_index = self._reward_positions.index(tuple(self._agent_position))
             self._rewards_state[reward_index] = 1
             self._rewards_received.append(tuple(self._agent_position))
-        else:
-            reward = 0.0
 
         return reward
 
@@ -757,7 +770,8 @@ class PosnerEnv(base_environment.BaseEnvironment):
         """
         conditions = [
             self._episode_step_count == self._episode_timeout,
-            len(self._rewards_received) == self._accessible_rewards,
+            len(self._rewards_received)
+            == self._total_rewards - len(self._inaccessible_rewards),
         ]
         return not any(conditions)
 
@@ -865,17 +879,13 @@ class PosnerEnv(base_environment.BaseEnvironment):
         self._training = train
         self._agent_position = np.array(self._starting_xy)
         self._rewards_received = []
+        self._inaccessible_rewards = []
         self._keys_1_state = np.zeros(len(self._key_1_positions), dtype=int)
         self._keys_2_state = np.zeros(len(self._key_2_positions), dtype=int)
         self._rewards_state = np.zeros(len(self._rewards), dtype=int)
 
         if self._correct_keys_change:
-            self._correct_keys = [
-                constants.GOLD if s < 0.5 else constants.SILVER
-                for s in np.random.random(size=self._total_rewards)
-            ]
-        if self._correct_keys_change:
-            self._correct_keys = self._random_correct_keys()
+            self._correct_keys = utils.random_correct_keys(num_keys=self._total_rewards)
             if self._reward_by == constants.COLOR:
                 if self._keys_change_color:
                     self._color_keys_randomly()
