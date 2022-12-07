@@ -306,6 +306,8 @@ def main(argv):
             ("normalized_return", human_normalized_score, "%.3f"),
             ("capped_normalized_return", capped_human_normalized_score, "%.3f"),
             ("human_gap", 1.0 - capped_human_normalized_score, "%.3f"),
+            ("train_loss", train_stats["loss"], "%.5f"),
+            ("eval_loss", eval_stats["loss"], "%.5f"),
         ]
         log_output_str = ", ".join(("%s: " + f) % (n, v) for n, v, f in log_output)
         logging.info(log_output_str)
