@@ -71,8 +71,8 @@ flags.DEFINE_integer("num_iterations", 200, "")
 flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
 flags.DEFINE_integer("num_eval_frames", int(5e3), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
-flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
-flags.DEFINE_string("checkpoint_path", "/tmp/checkpoint.pkl", "")
+# flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
+# flags.DEFINE_string("checkpoint_path", "/tmp/checkpoint.pkl", "")
 flags.DEFINE_string("results_path", None, "")  # where to store results
 
 
