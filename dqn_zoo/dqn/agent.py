@@ -28,6 +28,7 @@ import numpy as np
 import optax
 import rlax
 from absl import logging
+
 from dqn_zoo import parts, processors
 from dqn_zoo import replay as replay_lib
 
@@ -100,17 +101,17 @@ class Dqn(parts.Agent):
             losses = rlax.l2_loss(td_errors)
             chex.assert_shape(losses, (self._batch_size,))
             loss = jnp.mean(losses)
-            return loss
+            return loss, {"loss": loss}
 
         def update(rng_key, opt_state, online_params, target_params, transitions):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
-            d_loss_d_params = jax.grad(loss_fn)(
+            d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
                 online_params, target_params, transitions, update_key
             )
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
-            return rng_key, new_opt_state, new_online_params
+            return rng_key, new_opt_state, new_online_params, aux
 
         self._update = jax.jit(update)
 
@@ -141,15 +142,17 @@ class Dqn(parts.Agent):
                 self._replay.add(transition)
 
         if self._replay.size < self._min_replay_capacity:
-            return action
+            return action, {}
 
         if self._frame_t % self._learn_period == 0:
-            self._learn()
+            aux = self._learn()
+        else:
+            aux = {}
 
         if self._frame_t % self._target_network_update_period == 0:
             self._target_params = self._online_params
 
-        return action
+        return action, aux
 
     def reset(self) -> None:
         """Resets the agent's episodic state such as frame stack and action repeat.
@@ -173,13 +176,14 @@ class Dqn(parts.Agent):
         """Samples a batch of transitions from replay and learns from it."""
         logging.log_first_n(logging.INFO, "Begin learning", 1)
         transitions = self._replay.sample(self._batch_size)
-        self._rng_key, self._opt_state, self._online_params = self._update(
+        self._rng_key, self._opt_state, self._online_params, aux = self._update(
             self._rng_key,
             self._opt_state,
             self._online_params,
             self._target_params,
             transitions,
         )
+        return aux
 
     @property
     def online_params(self) -> parts.NetworkParams:
