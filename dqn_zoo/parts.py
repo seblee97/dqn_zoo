@@ -603,3 +603,21 @@ def compute_value_function(
         state_action_value_stds,
         state_action_value_variances,
     )
+
+
+class ConstantLearningRate:
+    def __init__(self, learning_rate) -> None:
+        self._learning_rate = learning_rate
+
+    def __call__(self, expectation_info: Dict, variance_info: Dict):
+        return self._learning_rate
+
+
+class DoyaDayuLearningRate:
+    def __call__(self, expectation_info: Dict, variance_info: Dict):
+        online_expectation_var = expectation_info["online_output_variance"]
+        online_variance_mean = variance_info["online_output_mean"]
+
+        return jnp.mean(
+            online_expectation_var / (online_expectation_var + online_variance_mean)
+        )

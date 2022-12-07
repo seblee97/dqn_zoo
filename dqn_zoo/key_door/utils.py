@@ -3,6 +3,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import yaml
+
 from dqn_zoo.key_door import constants
 
 
@@ -91,6 +92,12 @@ def parse_map_positions(map_yaml_path: str) -> Tuple[List, List, List, List]:
     )
 
 
+def random_correct_keys(self, num_keys):
+    """Returns list of length total_rewards (equivalently number of each key)
+    such that each index is 0 or 1 with equal probability."""
+    return [0 if s < 0.5 else 1 for s in np.random.random(size=num_keys)]
+
+
 def parse_posner_map_positions(map_yaml_path: str) -> Tuple[List, List, List, List]:
     """Method to parse map settings from yaml file.
 
@@ -158,6 +165,8 @@ def parse_posner_map_positions(map_yaml_path: str) -> Tuple[List, List, List, Li
         )
     }
 
+    correct_keys = map_data.get(constants.CORRECT_KEYS)
+
     correct_keys_change = map_data[constants.CORRECT_KEYS_CHANGE]
 
     door_positions = parse_x_positions(
@@ -201,6 +210,7 @@ def parse_posner_map_positions(map_yaml_path: str) -> Tuple[List, List, List, Li
         gold_key_positions,
         key_1_positions,
         key_2_positions,
+        correct_keys,
         keys_change_color,
         correct_keys_change,
         door_positions,

@@ -21,8 +21,11 @@ http://www.nature.com/articles/nature14236.
 # pylint: disable=g-bad-import-order
 
 import collections
+import datetime
 import itertools
+import os
 import sys
+import time
 import typing
 
 import chex
@@ -32,10 +35,11 @@ import jax
 import numpy as np
 import optax
 from absl import app, flags, logging
+from jax.config import config
+
 from dqn_zoo import atari_data, constants, gym_key_door, networks, parts, processors
 from dqn_zoo import replay as replay_lib
 from dqn_zoo.dqn import agent
-from jax.config import config
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
@@ -69,14 +73,11 @@ flags.DEFINE_integer("num_eval_frames", int(5e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 # flags.DEFINE_string("checkpoint_path", "/tmp/checkpoint.pkl", "")
-flags.DEFINE_string(
-    "map_ascii_path", "dqn_zoo/key_door_maps/bandit_posner_maze.txt", ""
-)
-flags.DEFINE_string(
-    "map_yaml_path", "dqn_zoo/key_door_maps/bandit_posner_maze.yaml", ""
-)
+flags.DEFINE_string("map_ascii_path", "dqn_zoo/key_door_maps/multi_room_bandit.txt", "")
+flags.DEFINE_string("map_yaml_path", "dqn_zoo/key_door_maps/multi_room_bandit.yaml", "")
 flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
+flags.DEFINE_string("results_path", None, "")  # where to store results
 
 
 def main(argv):
@@ -88,7 +89,19 @@ def main(argv):
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
     )
 
-    def environment_builder():
+    # create timestamp for logging and checkpoint path
+    if FLAGS.results_path is None:
+        raw_datetime = datetime.datetime.fromtimestamp(time.time())
+        exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+        exp_path = os.path.join("results", exp_timestamp)
+        os.makedirs(exp_path, exist_ok=True)
+    else:
+        exp_path = FLAGS.results_path
+
+    visualisation_path = os.path.join(exp_path, "visualisations")
+    os.makedirs(visualisation_path, exist_ok=True)
+
+    def environment_builder(train_index: int = 0, test_index: int = 0):
         """Creates Key-Door environment."""
         env = gym_key_door.GymKeyDoor(
             env_args={
@@ -101,12 +114,15 @@ def main(argv):
                 constants.BATCH_DIMENSION: False,
                 constants.TORCH_AXES: False,
             },
+            train_index=train_index,
+            test_index=test_index,
             env_shape=FLAGS.env_shape,
+            checkpoint_path=exp_path,
         )
         return gym_key_door.RandomNoopsEnvironmentWrapper(
             env,
-            min_noop_steps=1,
-            max_noop_steps=30,
+            min_noop_steps=0,
+            max_noop_steps=0,
             seed=random_state.randint(1, 2**32),
         )
 
@@ -132,7 +148,7 @@ def main(argv):
         )
 
     # Create sample network input from sample preprocessor output.
-    sample_processed_timestep = preprocessor_builder()(env.reset())
+    sample_processed_timestep = preprocessor_builder()(env.reset(train=None))
     sample_processed_timestep = typing.cast(dm_env.TimeStep, sample_processed_timestep)
     sample_network_input = sample_processed_timestep.observation
 
@@ -227,12 +243,6 @@ def main(argv):
         rng_key=eval_rng_key,
     )
 
-    # create timestamp for logging and checkpoint path
-    raw_datetime = datetime.datetime.fromtimestamp(time.time())
-    exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
-    exp_path = os.path.join("results", exp_timestamp)
-    os.makedirs(exp_path, exist_ok=True)
-
     # setup writer
     writer = parts.CsvWriter(os.path.join(exp_path, "writer.csv"))
 
@@ -256,7 +266,12 @@ def main(argv):
 
     while state.iteration <= FLAGS.num_iterations:
         # New environment for each iteration to allow for determinism if preempted.
-        env = environment_builder()
+        if state.iteration == 0:
+            env = environment_builder(train_index=0, test_index=0)
+        else:
+            env = environment_builder(
+                train_index=env.train_index, test_index=env.test_index
+            )
 
         logging.info("Training iteration %d.", state.iteration)
         train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
