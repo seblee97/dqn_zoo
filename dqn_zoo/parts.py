@@ -179,8 +179,10 @@ class EpisodeTracker:
             # First reward is invalid, all other rewards are appended.
             self._current_episode_rewards.append(timestep_t.reward)
 
-            loss = aux.get("loss") or np.nan
-            self._current_episode_loss += loss
+            if bool(aux):
+                loss = aux.get("loss", np.nan)
+
+                self._current_episode_loss += loss
 
         self._num_steps_since_reset += 1
         self._current_episode_step += 1
@@ -243,7 +245,7 @@ class EpisodeTracker:
             "num_steps_over_episodes": self._num_steps_over_episodes,
             "current_episode_step": self._current_episode_step,
             "num_steps_since_reset": self._num_steps_since_reset,
-            "train_loss": episode_loss,
+            "loss": episode_loss,
         }
 
 
