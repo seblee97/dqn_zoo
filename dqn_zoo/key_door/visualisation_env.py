@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
+
 from dqn_zoo.key_door import constants, wrapper
 
 try:
@@ -86,7 +87,7 @@ class VisualisationEnv(wrapper.Wrapper):
 
         out = cv2.VideoWriter(
             filename=save_path,
-            fourcc=cv2.VideoWriter_fourcc("m", "p", "4", "v"),
+            fourcc=cv2.VideoWriter_fourcc("a", "v", "c", "1"),
             fps=FPS,
             frameSize=frameSize,
         )
