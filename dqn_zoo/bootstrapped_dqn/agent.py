@@ -32,7 +32,6 @@ class BootstrappedDqn(parts.Agent):
         optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.TransitionReplay,
-        shaping,
         mask_probability: float,
         num_heads: int,
         batch_size: int,
@@ -94,18 +93,6 @@ class BootstrappedDqn(parts.Agent):
             return q_values
 
         self._forward = jax.jit(_forward)
-
-        def shaping_output(target_params, transitions, rng_key):
-            _, *apply_keys = jax.random.split(rng_key, 3)
-            q_target_t = network.apply(
-                target_params, apply_keys[0], transitions.s_t
-            ).multi_head_output
-            flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
-            # compute shaping function F(s, a, s')
-            shaped_rewards = shaping_function(q_target_t, transitions, apply_keys[1])
-            penalties = shaped_rewards - transitions.r_t
-
-            return q_target_t, flattened_q_target, shaped_rewards, penalties
 
         def loss_fn(online_params, target_params, transitions, rng_key):
             """Calculates loss given network parameters and transitions."""
@@ -253,17 +240,6 @@ class BootstrappedDqn(parts.Agent):
 
             network_forward = network.apply(network_params, apply_key, s_t[None, ...])
             q_t = network_forward.q_values[0]  # average of multi-head output
-
-            # modulate action selection epsilon with uncertainty
-            value_distribution = network_forward.multi_head_output[0]
-            max_indices = jnp.argmax(value_distribution, axis=-1)
-            max_index_probabilities = jnp.bincount(
-                max_indices, minlength=len(q_t), length=len(q_t)
-            ) / len(max_indices)
-            entropy = -jnp.sum(
-                (max_index_probabilities + LOG_EPSILON)
-                * jnp.log(max_index_probabilities + LOG_EPSILON)
-            )
 
             a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
                 seed=policy_key
