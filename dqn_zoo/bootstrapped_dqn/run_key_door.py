@@ -17,7 +17,6 @@ from jax.config import config
 
 from dqn_zoo import atari_data, constants, gym_key_door, networks, parts, processors
 from dqn_zoo import replay as replay_lib
-from dqn_zoo import shaping
 from dqn_zoo.bootstrapped_dqn import agent
 
 # Relevant flag values are expressed in terms of environment frames.
@@ -32,15 +31,15 @@ flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_string("shaping_function_type", "no_penalty", "")
 flags.DEFINE_float("shaping_multiplicative_factor", -0.05, "")
 flags.DEFINE_integer("num_heads", 10, "")
-flags.DEFINE_float("mask_probability", 0.25, "")
+flags.DEFINE_float("mask_probability", 0.5, "")
 flags.DEFINE_integer("batch_size", 32, "")
 flags.DEFINE_integer("max_frames_per_episode", 500, "")  # 30 mins.
 flags.DEFINE_integer("num_action_repeats", 1, "")
 flags.DEFINE_integer("num_stacked_frames", 4, "")
 flags.DEFINE_float("exploration_epsilon_begin_value", 1.0, "")
-flags.DEFINE_float("exploration_epsilon_end_value", 0.01, "")
+flags.DEFINE_float("exploration_epsilon_end_value", 0.1, "")
 flags.DEFINE_float("exploration_epsilon_decay_frame_fraction", 0.02, "")
-flags.DEFINE_float("eval_exploration_epsilon", 0.01, "")
+flags.DEFINE_float("eval_exploration_epsilon", 0.05, "")
 flags.DEFINE_integer("target_network_update_period", int(4e4), "")
 flags.DEFINE_float("grad_error_bound", 1.0 / 32, "")
 flags.DEFINE_float("learning_rate", 0.00025, "")
@@ -75,7 +74,7 @@ def main(argv):
     )
     random_state = np.random.RandomState(FLAGS.seed)
     rng_key = jax.random.PRNGKey(
-        random_state.randint(-sys.maxsize - 1, sys.maxsize + 1)
+        random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
     )
 
     # create timestamp for logging and checkpoint path
@@ -220,7 +219,7 @@ def main(argv):
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
-        shaping=shaping.NoPenalty(),
+        # shaping=shaping.NoPenalty(),
         mask_probability=FLAGS.mask_probability,
         num_heads=FLAGS.num_heads,
         batch_size=FLAGS.batch_size,
@@ -285,53 +284,53 @@ def main(argv):
         eval_stats = parts.generate_statistics(eval_trackers, eval_seq_truncated)
 
         # visualise value function over environment
-        if state.iteration != 0 and state.iteration % FLAGS.visualise_values == 0:
+        # if state.iteration != 0 and state.iteration % FLAGS.visualise_values == 0:
 
-            # use train agent not eval agent wrapper
-            (
-                raw_state_action_values,
-                state_action_value_means,
-                state_action_value_stds,
-                state_action_value_variance,
-            ) = parts.compute_value_function(
-                train_agent,
-                env,
-                FLAGS.num_stacked_frames,
-                FLAGS.env_shape[:2],
-                variance_network=FLAGS.variance_network,
-            )
+        #     # use train agent not eval agent wrapper
+        #     (
+        #         raw_state_action_values,
+        #         state_action_value_means,
+        #         state_action_value_stds,
+        #         state_action_value_variance,
+        #     ) = parts.compute_value_function(
+        #         train_agent,
+        #         env,
+        #         FLAGS.num_stacked_frames,
+        #         FLAGS.env_shape[:2],
+        #         variance_network=FLAGS.variance_network,
+        #     )
 
-            averaged_value_means_position = env.average_values_over_positional_states(
-                state_action_value_means
-            )
-            averaged_value_stds_position = env.average_values_over_positional_states(
-                state_action_value_stds
-            )
-            averaged_value_variance_position = (
-                env.average_values_over_positional_states(state_action_value_variance)
-            )
+        #     averaged_value_means_position = env.average_values_over_positional_states(
+        #         state_action_value_means
+        #     )
+        #     averaged_value_stds_position = env.average_values_over_positional_states(
+        #         state_action_value_stds
+        #     )
+        #     averaged_value_variance_position = (
+        #         env.average_values_over_positional_states(state_action_value_variance)
+        #     )
 
-            env.plot_heatmap_over_env(
-                heatmap=averaged_value_means_position,
-                save_name=os.path.join(
-                    visualisation_path,
-                    f"value_function_mean_{state.iteration}.pdf",
-                ),
-            )
-            env.plot_heatmap_over_env(
-                heatmap=averaged_value_stds_position,
-                save_name=os.path.join(
-                    visualisation_path,
-                    f"value_function_std_{state.iteration}.pdf",
-                ),
-            )
-            env.plot_heatmap_over_env(
-                heatmap=averaged_value_variance_position,
-                save_name=os.path.join(
-                    visualisation_path,
-                    f"value_function_variance_{state.iteration}.pdf",
-                ),
-            )
+        #     env.plot_heatmap_over_env(
+        #         heatmap=averaged_value_means_position,
+        #         save_name=os.path.join(
+        #             visualisation_path,
+        #             f"value_function_mean_{state.iteration}.pdf",
+        #         ),
+        #     )
+        #     env.plot_heatmap_over_env(
+        #         heatmap=averaged_value_stds_position,
+        #         save_name=os.path.join(
+        #             visualisation_path,
+        #             f"value_function_std_{state.iteration}.pdf",
+        #         ),
+        #     )
+        #     env.plot_heatmap_over_env(
+        #         heatmap=averaged_value_variance_position,
+        #         save_name=os.path.join(
+        #             visualisation_path,
+        #             f"value_function_variance_{state.iteration}.pdf",
+        #         ),
+        #     )
 
         # Logging and checkpointing.
         human_normalized_score = atari_data.get_human_normalized_score(
