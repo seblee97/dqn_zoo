@@ -338,6 +338,15 @@ def main(argv):
             FLAGS.environment_name, eval_stats["episode_return"]
         )
         capped_human_normalized_score = np.amin([1.0, human_normalized_score])
+
+        if train_stats["num_episodes"] == 0:
+            train_episode_length = np.nan
+        else:
+            train_episode_length = FLAGS.num_train_frames / train_stats["num_episodes"]
+        if eval_stats["num_episodes"] == 0:
+            eval_episode_length = np.nan
+        else:
+            eval_episode_length = FLAGS.num_train_frames / eval_stats["num_episodes"]
         log_output = [
             ("iteration", state.iteration, "%3d"),
             ("frame", state.iteration * FLAGS.num_train_frames, "%5d"),
@@ -352,9 +361,18 @@ def main(argv):
             ("normalized_return", human_normalized_score, "%.3f"),
             ("capped_normalized_return", capped_human_normalized_score, "%.3f"),
             ("human_gap", 1.0 - capped_human_normalized_score, "%.3f"),
-            ("train_loss", train_stats["train_loss"], "% 2.2f"),
-            ("shaped_reward", train_stats["shaped_reward"], "% 2.2f"),
-            ("penalties", train_stats["penalties"], "% 2.2f"),
+            ("train_loss", train_stats["loss"], "%.5f"),
+            ("eval_loss", eval_stats["loss"], "%.5f"),
+            (
+                "train_episode_length",
+                train_episode_length,
+                "%.2f",
+            ),
+            (
+                "eval_episode_length",
+                eval_episode_length,
+                "%.2f",
+            ),
         ]
         log_output_str = ", ".join(("%s: " + f) % (n, v) for n, v, f in log_output)
         logging.info(log_output_str)
