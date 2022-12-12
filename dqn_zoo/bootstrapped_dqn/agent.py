@@ -240,7 +240,7 @@ class BootstrappedDqn(parts.Agent):
             rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
 
             network_forward = network.apply(network_params, apply_key, s_t[None, ...])
-            q_t = network_forward.q_values[0]  # average of multi-head output
+            q_t = network_forward.random_head_q_value  # average of multi-head output
 
             a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
                 seed=policy_key
