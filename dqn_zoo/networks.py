@@ -392,19 +392,19 @@ def bootstrapped_dqn_multi_head_network(
         network_output = network(inputs)
         multi_head_output = jnp.reshape(network_output, (-1, num_heads, num_actions))
 
-        random_head_indices = jax.random.choice(
-            key=hk.next_rng_key(), a=num_heads, shape=(multi_head_output.shape[0],)
-        )
-        random_head_q_value = jnp.reshape(
-            multi_head_output[:, random_head_indices], (-1, num_actions)
-        )
+        # random_head_indices = jax.random.choice(
+        #     key=hk.next_rng_key(), a=num_heads, shape=(multi_head_output.shape[0],)
+        # )
+        # random_head_q_value = jnp.reshape(
+        #     multi_head_output[:, random_head_indices], (-1, num_actions)
+        # )
 
         # TODO: make the q values (used for eval) the output of voting or weighted mean.
         # Currently random head q value used as placeholder
         return MultiHeadQNetworkOutputs(
             q_values=jnp.mean(multi_head_output, axis=1),
             multi_head_output=multi_head_output,
-            random_head_q_value=random_head_q_value,
+            random_head_q_value=multi_head_output[0][0],
         )
 
     return net_fn
