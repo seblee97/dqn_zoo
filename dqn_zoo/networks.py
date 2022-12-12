@@ -381,8 +381,6 @@ def bootstrapped_dqn_multi_head_network(
 ):
     """DQN network with multiple heads (representing ensemble)."""
 
-    binomial_probabilities = jnp.array([mask_probability, 1 - mask_probability])
-
     def net_fn(inputs):
         """Function representing multi-head DQN Q-network."""
         network = hk.Sequential(
@@ -393,15 +391,7 @@ def bootstrapped_dqn_multi_head_network(
         )
         network_output = network(inputs)
         multi_head_output = jnp.reshape(network_output, (-1, num_heads, num_actions))
-        mask = jax.random.choice(
-            key=hk.next_rng_key(),
-            a=2,
-            shape=(
-                multi_head_output.shape[0],
-                num_heads,
-            ),
-            p=binomial_probabilities,
-        )
+
         random_head_indices = jax.random.choice(
             key=hk.next_rng_key(), a=num_heads, shape=(multi_head_output.shape[0],)
         )
