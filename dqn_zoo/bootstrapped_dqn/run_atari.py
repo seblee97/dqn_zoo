@@ -29,13 +29,13 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("environment_name", "pong", "")
 flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
-flags.DEFINE_integer("replay_capacity", int(1e4), "")
+flags.DEFINE_integer("replay_capacity", int(1e5), "")
 flags.DEFINE_bool("compress_state", True, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_string("shaping_function_type", "no_penalty", "")
 flags.DEFINE_float("shaping_multiplicative_factor", -0.05, "")
 flags.DEFINE_integer("num_heads", 10, "")
-flags.DEFINE_float("mask_probability", 0.25, "")
+flags.DEFINE_float("mask_probability", 0.5, "")
 flags.DEFINE_integer("batch_size", 32, "")
 flags.DEFINE_integer("max_frames_per_episode", 108000, "")  # 30 mins.
 flags.DEFINE_integer("num_action_repeats", 4, "")
@@ -44,8 +44,8 @@ flags.DEFINE_float("exploration_epsilon_begin_value", 1.0, "")
 flags.DEFINE_float("exploration_epsilon_end_value", 0.01, "")
 flags.DEFINE_float("exploration_epsilon_decay_frame_fraction", 0.02, "")
 flags.DEFINE_float("eval_exploration_epsilon", 0.01, "")
-flags.DEFINE_integer("target_network_update_period", int(4e4), "")
-flags.DEFINE_float("grad_error_bound", 1.0 / 32, "")
+flags.DEFINE_integer("target_network_update_period", int(1e4), "")
+flags.DEFINE_float("grad_error_bound", 1.0 / 320, "")
 flags.DEFINE_float("learning_rate", 0.00025, "")
 flags.DEFINE_float("optimizer_epsilon", 0.01 / 32**2, "")
 flags.DEFINE_float("additional_discount", 0.99, "")
@@ -189,7 +189,6 @@ def main(argv):
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
-        shaping=shaping.NoPenalty(),
         mask_probability=FLAGS.mask_probability,
         num_heads=FLAGS.num_heads,
         batch_size=FLAGS.batch_size,
@@ -201,7 +200,7 @@ def main(argv):
         rng_key=train_rng_key,
         variance_network=False,
     )
-    eval_agent = parts.EpsilonGreedyActor(
+    eval_agent = parts.EpsilonGreedyVotingActor(
         preprocessor=preprocessor_builder(),
         network=network,
         exploration_epsilon=FLAGS.eval_exploration_epsilon,
@@ -252,6 +251,15 @@ def main(argv):
             FLAGS.environment_name, eval_stats["episode_return"]
         )
         capped_human_normalized_score = np.amin([1.0, human_normalized_score])
+
+        if train_stats["num_episodes"] == 0:
+            train_episode_length = np.nan
+        else:
+            train_episode_length = FLAGS.num_train_frames / train_stats["num_episodes"]
+        if eval_stats["num_episodes"] == 0:
+            eval_episode_length = np.nan
+        else:
+            eval_episode_length = FLAGS.num_train_frames / eval_stats["num_episodes"]
         log_output = [
             ("iteration", state.iteration, "%3d"),
             ("frame", state.iteration * FLAGS.num_train_frames, "%5d"),
@@ -266,9 +274,18 @@ def main(argv):
             ("normalized_return", human_normalized_score, "%.3f"),
             ("capped_normalized_return", capped_human_normalized_score, "%.3f"),
             ("human_gap", 1.0 - capped_human_normalized_score, "%.3f"),
-            ("train_loss", train_stats["train_loss"], "% 2.2f"),
-            ("shaped_reward", train_stats["shaped_reward"], "% 2.2f"),
-            ("penalties", train_stats["penalties"], "% 2.2f"),
+            ("train_loss", train_stats["loss"], "% 2.2f"),
+            ("eval_loss", eval_stats["loss"], "%.5f"),
+            (
+                "train_episode_length",
+                train_episode_length,
+                "%.2f",
+            ),
+            (
+                "eval_episode_length",
+                eval_episode_length,
+                "%.2f",
+            ),
         ]
         log_output_str = ", ".join(("%s: " + f) % (n, v) for n, v, f in log_output)
         logging.info(log_output_str)
