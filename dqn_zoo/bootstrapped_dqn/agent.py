@@ -138,8 +138,6 @@ class BootstrappedDqn(parts.Agent):
                 raw_td_errors, -grad_error_bound, grad_error_bound
             )
 
-            clipped_td_errors = clipped_td_errors / num_heads
-
             losses = rlax.l2_loss(clipped_td_errors)
             assert losses.shape == (self._batch_size * num_heads,)
 
