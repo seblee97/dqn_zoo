@@ -23,10 +23,12 @@ class GymKeyDoor(dm_env.Environment):
         self._train_index = train_index
         self._test_index = test_index
 
+        self._training: bool = False
+
     def reset(self, train: bool) -> dm_env.TimeStep:
         """Resets the environment and starts a new episode."""
-        if train:
-            if self._train_index % 100 == 0 and self._train_index != 0:
+        if self._training:
+            if self._train_index % 10 == 0 and self._train_index != 0:
                 try:
                     self._key_door_env.visualise_episode_history(
                         os.path.join(
@@ -37,7 +39,7 @@ class GymKeyDoor(dm_env.Environment):
                 except:
                     print(self._train_index, self._test_index, "FAILED VISUALISATION")
         else:
-            if self._test_index % 100 == 0 and self._test_index != 0:
+            if self._test_index % 10 == 0 and self._test_index != 0:
                 try:
                     self._key_door_env.visualise_episode_history(
                         os.path.join(
@@ -50,6 +52,7 @@ class GymKeyDoor(dm_env.Environment):
                     print(
                         self._train_index, self._test_index, "FAILED VISUALISATION TEST"
                     )
+        self._training = train
         observation = self._key_door_env.reset_environment(train=train)
         lives = np.int32(1)
         timestep = dm_env.restart((observation, lives))
