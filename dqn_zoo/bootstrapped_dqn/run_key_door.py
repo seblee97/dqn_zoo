@@ -1,6 +1,7 @@
 import collections
 import datetime
 import itertools
+import json
 import os
 import sys
 import time
@@ -24,7 +25,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("environment_name", "posner_env", "")
 flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
-flags.DEFINE_integer("replay_capacity", int(1e4), "")
+flags.DEFINE_integer("replay_capacity", int(1e6), "")
 flags.DEFINE_bool("compress_state", True, "")
 flags.DEFINE_bool("grayscale", False, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
@@ -33,14 +34,14 @@ flags.DEFINE_float("shaping_multiplicative_factor", -0.05, "")
 flags.DEFINE_integer("num_heads", 10, "")
 flags.DEFINE_float("mask_probability", 0.5, "")
 flags.DEFINE_integer("batch_size", 32, "")
-flags.DEFINE_integer("max_frames_per_episode", 500, "")  # 30 mins.
+flags.DEFINE_integer("max_frames_per_episode", 800, "")  # 30 mins.
 flags.DEFINE_integer("num_action_repeats", 1, "")
 flags.DEFINE_integer("num_stacked_frames", 4, "")
 flags.DEFINE_float("exploration_epsilon_begin_value", 1.0, "")
 flags.DEFINE_float("exploration_epsilon_end_value", 0.1, "")
 flags.DEFINE_float("exploration_epsilon_decay_frame_fraction", 0.02, "")
 flags.DEFINE_float("eval_exploration_epsilon", 0.05, "")
-flags.DEFINE_integer("target_network_update_period", int(4e4), "")
+flags.DEFINE_integer("target_network_update_period", int(1e4), "")
 flags.DEFINE_float("grad_error_bound", 1.0 / 32, "")
 flags.DEFINE_float("learning_rate", 0.00025, "")
 flags.DEFINE_float("optimizer_epsilon", 0.01 / 32**2, "")
@@ -48,9 +49,9 @@ flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
 flags.DEFINE_integer("num_iterations", 500, "")
-flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
-flags.DEFINE_integer("num_eval_frames", int(1e4), "")  # Per iteration.
-flags.DEFINE_integer("learn_period", 16, "")
+flags.DEFINE_integer("num_train_frames", int(1e6), "")  # Per iteration.
+flags.DEFINE_integer("num_eval_frames", int(1e5), "")  # Per iteration.
+flags.DEFINE_integer("learn_period", 4, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 # flags.DEFINE_string("checkpoint_path", None, "")
 flags.DEFINE_string("map_ascii_path", "dqn_zoo/key_door_maps/multi_room_bandit.txt", "")
@@ -85,6 +86,10 @@ def main(argv):
         os.makedirs(exp_path, exist_ok=True)
     else:
         exp_path = FLAGS.results_path
+
+    flag_dict = FLAGS.flag_values_dict()
+    with open(os.path.join(exp_path, "flags.json"), "+w") as json_file:
+        json.dump(flag_dict, json_file, indent=6)
 
     visualisation_path = os.path.join(exp_path, "visualisations")
     os.makedirs(visualisation_path, exist_ok=True)
@@ -230,7 +235,7 @@ def main(argv):
         grad_error_bound=FLAGS.grad_error_bound,
         rng_key=train_rng_key,
     )
-    eval_agent = parts.EpsilonGreedyActor(
+    eval_agent = parts.EpsilonGreedyVotingActor(
         preprocessor=preprocessor_builder(),
         network=network,
         exploration_epsilon=FLAGS.eval_exploration_epsilon,
