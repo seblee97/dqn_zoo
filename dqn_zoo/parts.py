@@ -362,6 +362,78 @@ class EpsilonGreedyActor(Agent):
         def select_action(rng_key, network_params, s_t):
             """Samples action from eps-greedy policy wrt Q-values at given state."""
             rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
+            q_t = network.apply(network_params, apply_key, s_t[None, ...]).q_values[0]
+            a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
+                seed=policy_key
+            )
+
+            return rng_key, a_t
+
+        # self._select_action = jax.jit(select_action)
+        self._select_action = select_action
+
+    def step(self, timestep: dm_env.TimeStep) -> Action:
+        """Selects action given a timestep."""
+        timestep = self._preprocessor(timestep)
+
+        if timestep is None:  # Repeat action.
+            return self._action, {}
+
+        s_t = timestep.observation
+        self._rng_key, a_t = self._select_action(
+            self._rng_key, self.network_params, s_t
+        )
+        self._action = Action(jax.device_get(a_t))
+        return self._action, {}
+
+    def reset(self) -> None:
+        """Resets the agent's episodic state such as frame stack and action repeat.
+
+        This method should be called at the beginning of every episode.
+        """
+        processors.reset(self._preprocessor)
+        self._action = None
+
+    def get_state(self) -> Mapping[Text, Any]:
+        """Retrieves agent state as a dictionary (e.g. for serialization)."""
+        # State contains network params to make agent easy to run from a checkpoint.
+        return {
+            "rng_key": self._rng_key,
+            "network_params": self.network_params,
+        }
+
+    def set_state(self, state: Mapping[Text, Any]) -> None:
+        """Sets agent state from a (potentially de-serialized) dictionary."""
+        self._rng_key = state["rng_key"]
+        self.network_params = state["network_params"]
+
+    @property
+    def statistics(self) -> Mapping[Text, float]:
+        return {}
+
+
+class EpsilonGreedyVotingActor(Agent):
+    """Agent that acts with a given set of Q-network parameters and epsilon.
+
+    Network parameters are set on the actor. The actor can be serialized,
+    ensuring determinism of execution (e.g. when checkpointing).
+    """
+
+    def __init__(
+        self,
+        preprocessor: processors.Processor,
+        network: Network,
+        exploration_epsilon: float,
+        rng_key: PRNGKey,
+    ):
+        self._preprocessor = preprocessor
+        self._rng_key = rng_key
+        self._action = None
+        self.network_params = None  # Nest of arrays (haiku.Params), set externally.
+
+        def select_action(rng_key, network_params, s_t):
+            """Samples action from eps-greedy policy wrt Q-values at given state."""
+            rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
 
             q_t = network.apply(
                 network_params, apply_key, s_t[None, ...]
@@ -383,6 +455,7 @@ class EpsilonGreedyActor(Agent):
             return rng_key, a_t
 
         self._select_action = jax.jit(select_action)
+        # self._select_action = select_action
 
     def step(self, timestep: dm_env.TimeStep) -> Action:
         """Selects action given a timestep."""
