@@ -87,7 +87,7 @@ class VisualisationEnv(wrapper.Wrapper):
 
         out = cv2.VideoWriter(
             filename=save_path,
-            fourcc=cv2.VideoWriter_fourcc("a", "v", "c", "1"),
+            fourcc=cv2.VideoWriter_fourcc("m", "p", "4", "v"),
             fps=FPS,
             frameSize=frameSize,
         )
