@@ -29,7 +29,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("environment_name", "pong", "")
 flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
-flags.DEFINE_integer("replay_capacity", int(1e5), "")
+flags.DEFINE_integer("replay_capacity", int(1e6), "")
 flags.DEFINE_bool("compress_state", True, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_string("shaping_function_type", "no_penalty", "")
@@ -52,8 +52,8 @@ flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
 flags.DEFINE_integer("num_iterations", 200, "")
-flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
-flags.DEFINE_integer("num_eval_frames", int(5e4), "")  # Per iteration.
+flags.DEFINE_integer("num_train_frames", int(1e6), "")  # Per iteration.
+flags.DEFINE_integer("num_eval_frames", int(5e5), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 # flags.DEFINE_string("checkpoint_path", None, "")
