@@ -161,6 +161,25 @@ class GymKeyDoor(dm_env.Environment):
     def test_index(self):
         return self._test_index
 
+    def save_environment_images(self, save_folder: str):
+        self._key_door_env.reset_environment()
+        plain_map_path = os.path.join(save_folder, "plain_map.pdf")
+        cue_map_path = os.path.join(save_folder, "cue_map_path.pdf")
+        bounding_box_map_path = os.path.join(save_folder, "bounding_box_map.pdf")
+        annotated_map_path = os.path.join(save_folder, "annotated_map.pdf")
+        # grid without cue
+        self._key_door_env.render(save_path=plain_map_path)
+        # grid with cue (if applicable)
+        self._key_door_env.render(save_path=cue_map_path, format="cue")
+        # grid with cue and cue index highlighted
+        self._key_door_env.render(
+            save_path=bounding_box_map_path, format="cue", annotate=True
+        )
+        # grid with cue, cue index highlighted, validity annotated
+        self._key_door_env.render(
+            save_path=annotated_map_path, format="cue", annotate="full"
+        )
+
 
 class RandomNoopsEnvironmentWrapper(dm_env.Environment):
     """Adds a random number of noop actions at the beginning of each episode."""
@@ -277,3 +296,6 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
     @property
     def test_index(self):
         return self._environment.test_index
+
+    def save_environment_images(self, save_folder: str):
+        self._environment.save_environment_images(save_folder=save_folder)
