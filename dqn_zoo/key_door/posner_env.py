@@ -537,7 +537,7 @@ class PosnerEnv(base_environment.BaseEnvironment):
         return state
 
     def _rolling_cued_skeleton(self):
-        return np.vstack((self._current_cue, self._rolling_env_skeleton))
+        return np.vstack((self._rolling_env_skeleton, self._current_cue))
 
     def get_state_representation(
         self,
