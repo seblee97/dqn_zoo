@@ -28,6 +28,7 @@ class VisualisationEnv(wrapper.Wrapper):
         save_path: Optional[str] = None,
         dpi: Optional[int] = 60,
         format: str = "state",
+        annotate: str = None,
     ) -> None:
         if format == constants.STATE:
             assert (
@@ -37,16 +38,50 @@ class VisualisationEnv(wrapper.Wrapper):
             "Else render stationary environment skeleton using format='stationary'"
         if save_path:
             fig = plt.figure()
-            plt.imshow(
-                self._env._env_skeleton(
-                    rewards=format,
-                    keys={k: format for k in self._env._key_ids},
-                    doors=format,
-                    agent=format,
-                    cue=format,
-                ),
-                origin="lower",
-            )
+            if format == "cue":
+                plot = self._env._rolling_cued_skeleton()
+                plt.imshow(plot)
+                if annotate is not None:
+
+                    def _bounding_box(x, y, width, height):
+                        rect = plt.Rectangle(
+                            (x - 0.5, y - 0.5),
+                            width,
+                            height,
+                            fill=False,
+                            color="red",
+                            linewidth=5,
+                        )
+                        plt.gca().add_patch(rect)
+                        return rect
+
+                    # retrieve bounding box measurements
+                    bb_l = self._env._cue_index * self._env._cue_size
+                    bb_t = self._env._map.shape[0]
+                    _bounding_box(
+                        x=bb_l,
+                        y=bb_t,
+                        width=self._env._cue_size,
+                        height=self._env._cue_line_depth,
+                    )
+
+                    if annotate == "full":
+                        plt.annotate(
+                            text=f"{self._env._cue_index}: {self._env._cue_validity}",
+                            xy=(bb_l, bb_t),
+                        )
+
+            else:
+                plt.imshow(
+                    self._env._env_skeleton(
+                        rewards=format,
+                        keys={k: format for k in self._env._key_ids},
+                        doors=format,
+                        agent=format,
+                        cue=format,
+                    ),
+                    origin="lower",
+                )
             fig.savefig(save_path, dpi=dpi)
         else:
             plt.imshow(
