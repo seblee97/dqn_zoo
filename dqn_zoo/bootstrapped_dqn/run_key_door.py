@@ -3,6 +3,7 @@ import datetime
 import itertools
 import json
 import os
+import shutil
 import sys
 import time
 import typing
@@ -92,7 +93,9 @@ def main(argv):
         json.dump(flag_dict, json_file, indent=6)
 
     visualisation_path = os.path.join(exp_path, "visualisations")
+    map_path = os.path.join(exp_path, "maps")
     os.makedirs(visualisation_path, exist_ok=True)
+    os.makedirs(map_path, exist_ok=True)
 
     def environment_builder(train_index: int = 0, test_index: int = 0):
         """Creates Key-Door environment."""
@@ -119,7 +122,14 @@ def main(argv):
             seed=random_state.randint(1, 2**32),
         )
 
+    # save map source files to exp_path
+    shutil.copy(FLAGS.map_ascii_path, exp_path)
+    shutil.copy(FLAGS.map_yaml_path, exp_path)
+
     env = environment_builder()
+
+    # render and save map
+    env.save_environment_images(save_folder=map_path)
 
     logging.info("Environment: %s", FLAGS.environment_name)
     logging.info("Action spec: %s", env.action_spec())
