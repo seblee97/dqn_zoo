@@ -1,29 +1,70 @@
 import os
+import shutil
 from typing import List, Optional, Tuple, Union
 
 import dm_env
 import numpy as np
 from dm_env import specs
 
-from dqn_zoo.key_door import posner_env, visualisation_env
+from dqn_zoo.key_door import curriculum_env, posner_env, visualisation_env
 
 
 class GymKeyDoor(dm_env.Environment):
     """Gym KeyDoor with a `dm_env.Environment` interface."""
 
-    def __init__(self, env_args, train_index, test_index, env_shape, checkpoint_path):
+    def __init__(
+        self,
+        env_args,
+        train_index,
+        test_index,
+        env_shape,
+        checkpoint_path,
+        curriculum_args=None,
+    ):
+        self._env_args = env_args
+        self._curriculum_args = curriculum_args
         self._env_shape = env_shape
         self._checkpoint_path = checkpoint_path
+        self._map_path = os.path.join(self._checkpoint_path, "maps")
         self._rollout_path = os.path.join(self._checkpoint_path, "rollouts")
         os.makedirs(self._rollout_path, exist_ok=True)
-        self._key_door_env = posner_env.PosnerEnv(**env_args)
-        self._key_door_env = visualisation_env.VisualisationEnv(self._key_door_env)
-        self._start_of_episode = True
+        os.makedirs(self._map_path, exist_ok=True)
 
+        self._start_of_episode = True
         self._train_index = train_index
         self._test_index = test_index
-
         self._training: bool = False
+
+        self._key_door_env = posner_env.PosnerEnv(**env_args)
+        self._key_door_env = visualisation_env.VisualisationEnv(self._key_door_env)
+        if curriculum_args is not None and curriculum_args["apply"]:
+            self._curriculum = True
+            self._key_door_env = curriculum_env.CurriculumEnv(
+                self._key_door_env,
+                transitions=curriculum_args["map_yaml_paths"],
+            )
+            self._transition_episodes = iter(curriculum_args["transition_episodes"])
+            self._next_transition_episode = next(self._transition_episodes)
+        else:
+            self._curriculum = False
+
+        self._save_env_data()
+        self._save_environment_images()
+
+    def _save_env_data(self):
+        # save map source files to exp_path
+        shutil.copy(self._env_args["map_ascii_path"], self._checkpoint_path)
+        shutil.copy(self._env_args["map_yaml_path"], self._checkpoint_path)
+        if self._curriculum:
+            curriculum_spec_path = os.path.join(
+                self._checkpoint_path, "curriculum_spec"
+            )
+            os.makedirs(curriculum_spec_path, exist_ok=True)
+            for i, yaml_path in enumerate(self._curriculum_args["map_yaml_paths"]):
+                filename = os.path.splitext(os.path.basename(yaml_path))[0]
+                ext = os.path.splitext(yaml_path)[-1]
+                shutil.copy(yaml_path, os.path.join(curriculum_spec_path, f"{filename}_{i}{ext}"))
+        
 
     def reset(self, train: bool) -> dm_env.TimeStep:
         """Resets the environment and starts a new episode."""
@@ -38,6 +79,9 @@ class GymKeyDoor(dm_env.Environment):
                     )
                 except:
                     print(self._train_index, self._test_index, "FAILED VISUALISATION")
+
+            if self._curriculum and self._train_index == self._next_transition_episode:
+                self._transition_environment()
         else:
             if self._test_index % 10 == 0 and self._test_index != 0:
                 try:
@@ -62,6 +106,13 @@ class GymKeyDoor(dm_env.Environment):
         else:
             self._test_index += 1
         return timestep
+
+    def _transition_environment(self):
+        next(self._key_door_env)
+        try:
+            self._next_transition_episode = next(self._transition_episodes)
+        except StopIteration:
+            self._next_transition_episode = np.inf
 
     def step(self, action: np.int32) -> dm_env.TimeStep:
         """Updates the environment given an action and returns a timestep."""
@@ -161,12 +212,12 @@ class GymKeyDoor(dm_env.Environment):
     def test_index(self):
         return self._test_index
 
-    def save_environment_images(self, save_folder: str):
-        self._key_door_env.reset_environment()
-        plain_map_path = os.path.join(save_folder, "plain_map.pdf")
-        cue_map_path = os.path.join(save_folder, "cue_map_path.pdf")
-        bounding_box_map_path = os.path.join(save_folder, "bounding_box_map.pdf")
-        annotated_map_path = os.path.join(save_folder, "annotated_map.pdf")
+    def _save_environment_images_for_yaml(self, yaml_path, extra=""):
+        self._key_door_env.reset_environment(map_yaml_path=yaml_path)
+        plain_map_path = os.path.join(self._map_path, f"plain_map{extra}.pdf")
+        cue_map_path = os.path.join(self._map_path, f"cue_map_path{extra}.pdf")
+        bounding_box_map_path = os.path.join(self._map_path, f"bounding_box_map{extra}.pdf")
+        annotated_map_path = os.path.join(self._map_path, f"annotated_map{extra}.pdf")
         # grid without cue
         self._key_door_env.render(save_path=plain_map_path)
         # grid with cue (if applicable)
@@ -179,6 +230,12 @@ class GymKeyDoor(dm_env.Environment):
         self._key_door_env.render(
             save_path=annotated_map_path, format="cue", annotate="full"
         )
+
+    def _save_environment_images(self):
+        self._save_environment_images_for_yaml(yaml_path=None)
+        if self._curriculum:
+            for i, yaml_path in enumerate(self._curriculum_args["map_yaml_paths"]):
+                self._save_environment_images_for_yaml(yaml_path=yaml_path, extra=f"_{i + 1}")
 
 
 class RandomNoopsEnvironmentWrapper(dm_env.Environment):
@@ -296,6 +353,4 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
     @property
     def test_index(self):
         return self._environment.test_index
-
-    def save_environment_images(self, save_folder: str):
-        self._environment.save_environment_images(save_folder=save_folder)
+        
