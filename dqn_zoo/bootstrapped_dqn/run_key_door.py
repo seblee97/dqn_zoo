@@ -287,10 +287,10 @@ def main(argv):
         # New environment for each iteration to allow for determinism if preempted.
         if state.iteration == 0:
             env = environment_builder(train_index=0, test_index=0)
-        else:
-            env = environment_builder(
-                train_index=env.train_index, test_index=env.test_index
-            )
+        # else:
+        #     env = environment_builder(
+        #         train_index=env.train_index, test_index=env.test_index
+        #     )
 
         logging.info("Training iteration %d.", state.iteration)
         train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
