@@ -57,6 +57,20 @@ flags.DEFINE_integer("learn_period", 4, "")
 # flags.DEFINE_string("checkpoint_path", None, "")
 flags.DEFINE_string("map_ascii_path", "dqn_zoo/key_door_maps/multi_room_bandit.txt", "")
 flags.DEFINE_string("map_yaml_path", "dqn_zoo/key_door_maps/multi_room_bandit.yaml", "")
+flags.DEFINE_bool("apply_curriculum", True, "")
+flags.DEFINE_list(
+    "map_yaml_paths",
+    [
+        "dqn_zoo/key_door_maps/multi_room_bandit.yaml",
+        "dqn_zoo/key_door_maps/multi_room_bandit.yaml",
+    ],
+    "Set of yaml paths that define different contexts. Used only if apply_curriculum is True",
+)
+flags.DEFINE_multi_integer(
+    "transition_episodes",
+    (10, 20),
+    "Episode number at which environment context switches. Should have same dimension as map_yaml_paths",
+)
 flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 flags.DEFINE_bool(
