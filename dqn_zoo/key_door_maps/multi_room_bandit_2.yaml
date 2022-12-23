@@ -1,0 +1,54 @@
+start_position: [1, 4]
+
+key_1_positions:
+    - [2, 6]
+    - [6, 6]
+    - [10, 6]
+
+key_2_positions:
+    - [2, 2]
+    - [6, 2]
+    - [10, 2]
+
+# correct_keys: [0, 0, 0]
+    
+# hard code correspondence between position (above) and color;
+# only used in case where BOTH correct_keys_change and keys_change_color are False.
+silver_key_positions:
+    - [2, 6]
+    - [6, 6]
+    - [10, 6]
+gold_key_positions:
+    - [2, 2]
+    - [6, 2]
+    - [10, 2]
+    
+# configure behaviour of the environment
+reward_by: color # position or color
+correct_keys_change: True
+keys_change_color: True
+    
+# configure the cue
+cue_format: posner # posner or single_bar (empty for no cue)
+cue_line_depth: 2 # depth of cue line
+cue_validity: 1 # probability that cue gives correct information
+cue_size: 2 # size of each cue
+num_cues: 8 # number of cues (one of which will be correct cue)
+cue_index: 3 # correct cue index (leave blank for random)
+
+door_positions:
+    - [4, 4]
+    - [8, 4]
+    - [12, 4]
+
+reward_positions:
+    - [7, 4]
+    - [11, 4]
+    - [15, 4]
+
+# provide either one set of statistics (used for all rewards)
+# or one set of statistics for each reward
+reward_statistics:
+    gaussian:
+        mean: 1
+        variance: 0
