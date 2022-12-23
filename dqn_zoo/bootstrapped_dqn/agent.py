@@ -95,7 +95,7 @@ class BootstrappedDqn(parts.Agent):
 
         self._forward = jax.jit(_forward)
 
-        def loss_fn(online_params, target_params, transitions, rng_key):
+        def loss_fn(online_params, target_params, transitions, exp, rng_key):
             """Calculates loss given network parameters and transitions."""
             _, *apply_keys = jax.random.split(rng_key, 4)
             # Batch : Heads : Actions (source state)
@@ -115,6 +115,11 @@ class BootstrappedDqn(parts.Agent):
             flattened_q = jnp.reshape(q_tm1, (-1, q_tm1.shape[-1]))
             flattened_q_t = jnp.reshape(q_t, (-1, q_t.shape[-1]))
             flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
+
+            if exp:
+                flattened_q = jnp.exp(flattened_q)
+                flattened_q_t = jnp.exp(flattened_q_t)
+                flattened_q_target = jnp.exp(flattened_q_target)
 
             # Batch x Heads
             repeated_actions = jnp.repeat(transitions.a_tm1, num_heads)
@@ -196,6 +201,7 @@ class BootstrappedDqn(parts.Agent):
                 online_params,
                 target_params,
                 transitions,
+                False,
                 update_key,
             )
 
@@ -219,6 +225,7 @@ class BootstrappedDqn(parts.Agent):
                     var_online_params,
                     var_target_params,
                     var_transitions,
+                    True,
                     var_update_key,
                 )
 
