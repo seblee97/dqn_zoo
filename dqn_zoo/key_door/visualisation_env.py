@@ -40,7 +40,7 @@ class VisualisationEnv(wrapper.Wrapper):
             fig = plt.figure()
             if format == "cue":
                 plot = self._env._rolling_cued_skeleton()
-                plt.imshow(plot)
+                plt.imshow(plot, origin="lower")
                 if annotate is not None:
 
                     def _bounding_box(x, y, width, height):
@@ -57,7 +57,7 @@ class VisualisationEnv(wrapper.Wrapper):
 
                     # retrieve bounding box measurements
                     bb_l = self._env._cue_index * self._env._cue_size
-                    bb_t = self._env._map.shape[0]
+                    bb_t = 0
                     _bounding_box(
                         x=bb_l,
                         y=bb_t,
