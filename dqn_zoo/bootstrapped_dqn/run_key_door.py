@@ -385,8 +385,8 @@ def main(argv):
             ("normalized_return", human_normalized_score, "%.3f"),
             ("capped_normalized_return", capped_human_normalized_score, "%.3f"),
             ("human_gap", 1.0 - capped_human_normalized_score, "%.3f"),
-            ("train_loss", train_stats["loss"], "%.5f"),
-            ("eval_loss", eval_stats["loss"], "%.5f"),
+            ("train_loss", train_stats["_loss"], "%.5f"),
+            ("eval_loss", eval_stats["_loss"], "%.5f"),
             (
                 "train_episode_length",
                 train_episode_length,
@@ -397,6 +397,22 @@ def main(argv):
                 eval_episode_length,
                 "%.2f",
             ),
+            ("mean_q", train_stats.get("mean_q", np.nan), "%.5f"),
+            ("mean_q_source", train_stats.get("mean_q_source", np.nan), "%.5f"),
+            ("mean_q_target", train_stats.get("mean_q_target", np.nan), "%.5f"),
+            ("mean_q_select", train_stats.get("mean_q_select", np.nan), "%.5f"),
+            ("std_q", train_stats.get("std_q", np.nan), "%.5f"),
+            ("std_q_source", train_stats.get("std_q_source", np.nan), "%.5f"),
+            ("std_q_target", train_stats.get("std_q_target", np.nan), "%.5f"),
+            ("std_q_select", train_stats.get("std_q_select", np.nan), "%.5f"),
+            ("var_mean_q", train_stats.get("var_mean_q", np.nan), "%.5f"),
+            ("var_mean_q_source", train_stats.get("var_mean_q_source", np.nan), "%.5f"),
+            ("var_mean_q_target", train_stats.get("var_mean_q_target", np.nan), "%.5f"),
+            ("var_mean_q_select", train_stats.get("var_mean_q_select", np.nan), "%.5f"),
+            ("var_std_q", train_stats.get("var_std_q", np.nan), "%.5f"),
+            ("var_std_q_source", train_stats.get("var_std_q_source", np.nan), "%.5f"),
+            ("var_std_q_target", train_stats.get("var_std_q_target", np.nan), "%.5f"),
+            ("var_std_q_select", train_stats.get("var_std_q_select", np.nan), "%.5f"),
         ]
         log_output_str = ", ".join(("%s: " + f) % (n, v) for n, v, f in log_output)
         logging.info(log_output_str)
