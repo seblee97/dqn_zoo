@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import os
+import shutil
 import subprocess
 import time
 
@@ -23,7 +24,23 @@ def _generate_script(num_nodes: int, num_gpus: int, mem: int, timeout: str, algo
     output_path = os.path.join(exp_path, "output.txt")
     error_path = os.path.join(exp_path, "error.txt")
 
-    with open("script", "+w") as script_file:
+    key_door_map_path = os.path.join(exp_path, "key_door_maps")
+    map_ascii_path = os.path.join(key_door_map_path, "multi_room_bandit.txt")
+    map_yaml_path = os.path.join(key_door_map_path, "multi_room_bandit.yaml")
+    map_yaml_paths = ",".join(
+        [
+            os.path.join(key_door_map_path, yml)
+            for yml in [
+                "multi_room_bandit.yaml",
+                "multi_room_bandit_1.yaml",
+                "multi_room_bandit_2.yaml",
+            ]
+        ]
+    )
+
+    shutil.copytree("dqn_zoo/key_door_maps", key_door_map_path)
+
+    with open(os.path.join(exp_path, "script"), "+w") as script_file:
         script_file.write("#!/bin/bash\n")
         script_file.write("#SBATCH -p gpu\n")
         script_file.write(f"#SBATCH -N {num_nodes}\n")
@@ -34,7 +51,9 @@ def _generate_script(num_nodes: int, num_gpus: int, mem: int, timeout: str, algo
         script_file.write(f"#SBATCH --output={output_path}\n")
         script_file.write(f"#SBATCH --error={error_path}\n")
         script_file.write(
-            f"python -m dqn_zoo.{algo}.run_key_door --results_path={exp_path}\n"
+            f"python -m dqn_zoo.{algo}.run_key_door --results_path={exp_path} "
+            f"--map_ascii_path={map_ascii_path} --map_yaml_path={map_yaml_path} "
+            f"--map_yaml_paths={map_yaml_paths}\n"
         )
 
 
