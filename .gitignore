@@ -4,3 +4,6 @@
 *.ipynb_checkpoints
 *.idea
 run_results
+results/
+*.pdf
+*.npy
