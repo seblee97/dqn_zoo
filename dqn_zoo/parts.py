@@ -159,6 +159,9 @@ class EpisodeTracker:
         self._episode_losses = None
         self._current_episode_loss = None
 
+        self._current_episode_aux_statistics = None
+        self._episode_aux_statistics = None
+
     def step(
         self,
         environment: Optional[dm_env.Environment],
@@ -180,8 +183,11 @@ class EpisodeTracker:
             self._current_episode_rewards.append(timestep_t.reward)
 
             if bool(aux):
+                for k, v in aux.items():
+                    if k not in self._current_episode_aux_statistics:
+                        self._current_episode_aux_statistics[k] = 0
+                    self._current_episode_aux_statistics[k] += v
                 loss = aux.get("loss", np.nan)
-
                 self._current_episode_loss += loss
 
         self._num_steps_since_reset += 1
@@ -196,6 +202,15 @@ class EpisodeTracker:
             self._episode_losses.append(self._current_episode_loss)
             self._current_episode_loss = 0
 
+            if bool(aux):
+                for k, v in aux.items():
+                    if k not in self._episode_aux_statistics:
+                        self._episode_aux_statistics[k] = []
+                    self._episode_aux_statistics[k].append(
+                        self._current_episode_aux_statistics[k]
+                    )
+                    self._current_episode_aux_statistics[k] = 0
+
     def reset(self) -> None:
         """Resets all gathered statistics, not to be called between episodes."""
         self._num_steps_since_reset = 0
@@ -206,6 +221,9 @@ class EpisodeTracker:
 
         self._episode_losses = []
         self._current_episode_loss = 0
+
+        self._current_episode_aux_statistics = {}
+        self._episode_aux_statistics = {}
 
     def get(self) -> Mapping[Text, Union[int, float, None]]:
         """Aggregates statistics and returns as a dictionary.
@@ -226,6 +244,14 @@ class EpisodeTracker:
             mean_episode_losses = np.array(self._episode_losses).mean()
             current_episode_loss = self._current_episode_loss
             episode_loss = mean_episode_losses
+
+            if self._episode_aux_statistics is not None:
+                episode_aux_statistics = {
+                    k: np.array(v).mean()
+                    for k, v in self._episode_aux_statistics.items()
+                }
+            else:
+                episode_aux_statistics = {}
         else:
             mean_episode_return = np.nan
             if self._num_steps_since_reset > 0:
@@ -237,15 +263,23 @@ class EpisodeTracker:
             episode_return = current_episode_return
             episode_loss = current_episode_loss
 
+            if self._current_episode_aux_statistics is not None:
+                episode_aux_statistics = self._current_episode_aux_statistics
+            else:
+                episode_aux_statistics = {}
+
         return {
-            "mean_episode_return": mean_episode_return,
-            "current_episode_return": current_episode_return,
-            "episode_return": episode_return,
-            "num_episodes": len(self._episode_returns),
-            "num_steps_over_episodes": self._num_steps_over_episodes,
-            "current_episode_step": self._current_episode_step,
-            "num_steps_since_reset": self._num_steps_since_reset,
-            "loss": episode_loss,
+            **{
+                "mean_episode_return": mean_episode_return,
+                "current_episode_return": current_episode_return,
+                "episode_return": episode_return,
+                "num_episodes": len(self._episode_returns),
+                "num_steps_over_episodes": self._num_steps_over_episodes,
+                "current_episode_step": self._current_episode_step,
+                "num_steps_since_reset": self._num_steps_since_reset,
+                "_loss": episode_loss,
+            },
+            **episode_aux_statistics,
         }
 
 
