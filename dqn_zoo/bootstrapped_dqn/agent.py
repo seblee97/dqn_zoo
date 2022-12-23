@@ -193,6 +193,9 @@ class BootstrappedDqn(parts.Agent):
                 var_new_online_params = optax.apply_updates(
                     var_online_params, var_updates
                 )
+                # add var aux fields to aux output dict
+                for k, v in var_aux.items():
+                    aux[f"var_{k}"] = v
             else:
                 var_new_opt_state = None
                 var_new_online_params = None
