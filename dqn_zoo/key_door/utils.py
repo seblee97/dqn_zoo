@@ -188,6 +188,7 @@ def parse_posner_map_positions(map_yaml_path: str) -> Tuple[List, List, List, Li
             constants.CUE_SIZE,
             constants.NUM_CUES,
             constants.CUE_LINE_DEPTH,
+            constants.CUE_INDEX,
         ]
     }
 
