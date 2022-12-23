@@ -39,8 +39,9 @@ def _generate_script(num_nodes: int, num_gpus: int, mem: int, timeout: str, algo
     )
 
     shutil.copytree("dqn_zoo/key_door_maps", key_door_map_path)
+    script_path = os.path.join(exp_path, "script")
 
-    with open(os.path.join(exp_path, "script"), "+w") as script_file:
+    with open(script_path, "+w") as script_file:
         script_file.write("#!/bin/bash\n")
         script_file.write("#SBATCH -p gpu\n")
         script_file.write(f"#SBATCH -N {num_nodes}\n")
@@ -56,14 +57,16 @@ def _generate_script(num_nodes: int, num_gpus: int, mem: int, timeout: str, algo
             f"--map_yaml_paths={map_yaml_paths}\n"
         )
 
+    return script_path
+
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    _generate_script(
+    script_path = _generate_script(
         num_nodes=args.num_nodes,
         num_gpus=args.num_gpus_per_node,
         mem=args.mem,
         timeout=args.timeout,
         algo=args.dqn_algorithm,
     )
-    subprocess.call("sbatch script", shell=True)
+    subprocess.call(f"sbatch {script_path}", shell=True)
