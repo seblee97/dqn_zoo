@@ -18,6 +18,7 @@ from dqn_zoo import replay as replay_lib
 # Batch variant of q_learning.
 _batch_q_learning = jax.vmap(rlax.q_learning)
 _batch_double_q_learning = jax.vmap(rlax.double_q_learning)
+_select_actions = jax.vmap(lambda q, a: q[a])
 
 
 class BootstrappedDqn(parts.Agent):
@@ -143,7 +144,41 @@ class BootstrappedDqn(parts.Agent):
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = jnp.sum(mask * losses) / jnp.sum(mask)
-            return loss, {"loss": loss, "deltas": raw_td_errors}
+
+            # compute logging quantities
+            # mean q value (over batch, head and actions)
+            mean_q = jnp.mean(q_tm1)
+            mean_q_source = jnp.mean(q_t)
+            mean_q_target = jnp.mean(q_target_t)
+            # mean q value (over batch, head, action chosen)
+            mean_q_select = jnp.mean(_select_actions(flattened_q, repeated_actions))
+            # std q value (over heads, mean over batch and actions)
+            std_q = jnp.mean(jnp.var(q_tm1, axis=1))
+            std_q_source = jnp.mean(jnp.var(q_t, axis=1))
+            std_q_target = jnp.mean(jnp.var(q_target_t, axis=1))
+            # std q value (over heads, mean over batch, actions chosen)
+            std_q_select = jnp.mean(
+                jnp.var(
+                    jnp.reshape(
+                        _select_actions(flattened_q, repeated_actions),
+                        (self._batch_size, num_heads),
+                    ),
+                    axis=1,
+                )
+            )
+
+            return loss, {
+                "loss": loss,
+                "deltas": raw_td_errors,
+                "mean_q": mean_q,
+                "mean_q_source": mean_q_source,
+                "mean_q_target": mean_q_target,
+                "mean_q_select": mean_q_select,
+                "std_q": std_q,
+                "std_q_source": std_q_source,
+                "std_q_target": std_q_target,
+                "std_q_select": std_q_select,
+            }
 
         def update(
             rng_key,
