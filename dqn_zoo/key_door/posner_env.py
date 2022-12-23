@@ -131,7 +131,9 @@ class PosnerEnv(base_environment.BaseEnvironment):
             if self._cue_format == constants.POSNER:
                 self._cue_size = self._cue_specification[constants.CUE_SIZE]
                 self._num_cues = self._cue_specification[constants.NUM_CUES]
-                self._cue_index = np.random.choice(self._num_cues)
+                self._cue_index = self._cue_specification.get(
+                    constants.CUE_INDEX, np.random.choice(self._num_cues)
+                )
 
                 assert (
                     self._cue_size * self._num_cues < self._map.shape[1]
@@ -537,7 +539,7 @@ class PosnerEnv(base_environment.BaseEnvironment):
         return state
 
     def _rolling_cued_skeleton(self):
-        return np.vstack((self._rolling_env_skeleton, self._current_cue))
+        return np.vstack((self._current_cue, self._rolling_env_skeleton))
 
     def get_state_representation(
         self,
