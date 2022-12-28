@@ -111,15 +111,15 @@ class BootstrappedDqn(parts.Agent):
                 target_params, apply_keys[2], transitions.s_t
             ).multi_head_output
 
+            if exp:
+                q_tm1 = jnp.exp(q_tm1)
+                q_t = jnp.exp(q_t)
+                q_target_t = jnp.exp(q_target_t)
+
             # Batch x Heads : Actions
             flattened_q = jnp.reshape(q_tm1, (-1, q_tm1.shape[-1]))
             flattened_q_t = jnp.reshape(q_t, (-1, q_t.shape[-1]))
             flattened_q_target = jnp.reshape(q_target_t, (-1, q_target_t.shape[-1]))
-
-            if exp:
-                flattened_q = jnp.exp(flattened_q)
-                flattened_q_t = jnp.exp(flattened_q_t)
-                flattened_q_target = jnp.exp(flattened_q_target)
 
             # Batch x Heads
             repeated_actions = jnp.repeat(transitions.a_tm1, num_heads)
