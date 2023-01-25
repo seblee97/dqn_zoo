@@ -397,6 +397,7 @@ def main(argv):
                 eval_episode_length,
                 "%.2f",
             ),
+            ("var_loss", train_stats.get("var_loss", np.nan), "%.5f"),
             ("mean_q", train_stats.get("mean_q", np.nan), "%.5f"),
             ("mean_q_source", train_stats.get("mean_q_source", np.nan), "%.5f"),
             ("mean_q_target", train_stats.get("mean_q_target", np.nan), "%.5f"),
