@@ -45,6 +45,7 @@ flags.DEFINE_float("eval_exploration_epsilon", 0.05, "")
 flags.DEFINE_integer("target_network_update_period", int(1e4), "")
 flags.DEFINE_float("grad_error_bound", 1.0 / (32 * 10), "")
 flags.DEFINE_float("learning_rate", 0.00025, "")
+flags.DEFINE_float("var_learning_rate", 0.000025, "")
 flags.DEFINE_float("optimizer_epsilon", 0.01 / 32**2, "")
 flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
@@ -234,6 +235,13 @@ def main(argv):
         centered=True,
     )
 
+    var_optimizer = optax.rmsprop(
+        learning_rate=FLAGS.var_learning_rate,
+        decay=0.95,
+        eps=FLAGS.optimizer_epsilon,
+        centered=True,
+    )
+
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
     train_agent = agent.BootstrappedDqn(
@@ -242,6 +250,7 @@ def main(argv):
         network=network,
         variance_network=FLAGS.variance_network,
         optimizer=optimizer,
+        var_optimizer=var_optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
         # shaping=shaping.NoPenalty(),
