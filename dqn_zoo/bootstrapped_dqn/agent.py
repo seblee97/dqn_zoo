@@ -31,6 +31,7 @@ class BootstrappedDqn(parts.Agent):
         network: parts.Network,
         variance_network: bool,
         optimizer: optax.GradientTransformation,
+        var_optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.TransitionReplay,
         mask_probability: float,
@@ -71,7 +72,7 @@ class BootstrappedDqn(parts.Agent):
                 var_network_rng_key, sample_network_input[None, ...]
             )
             self._var_target_params = self._var_online_params
-            self._var_opt_state = optimizer.init(self._var_online_params)
+            self._var_opt_state = var_optimizer.init(self._var_online_params)
         else:
             self._var_online_params = None
             self._var_target_params = None
@@ -229,7 +230,7 @@ class BootstrappedDqn(parts.Agent):
                     var_update_key,
                 )
 
-                var_updates, var_new_opt_state = optimizer.update(
+                var_updates, var_new_opt_state = var_optimizer.update(
                     var_d_loss_d_params, var_opt_state
                 )
                 var_new_online_params = optax.apply_updates(
