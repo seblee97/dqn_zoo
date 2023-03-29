@@ -55,6 +55,14 @@ class QRNetworkOutputs(typing.NamedTuple):
     q_dist: jnp.ndarray
 
 
+class EnsQRNetworkOutputs(typing.NamedTuple):
+    q_values: jnp.ndarray
+    q_dist: jnp.ndarray
+    q_dist_means_var: jnp.ndarray
+    q_dist_vars_mean: jnp.ndarray
+    q_dist_vars_var: jnp.ndarray
+
+
 class C51NetworkOutputs(typing.NamedTuple):
     q_values: jnp.ndarray
     q_logits: jnp.ndarray
@@ -316,6 +324,55 @@ def qr_atari_network(num_actions: int, quantiles: jnp.ndarray) -> NetworkFn:
         q_values = jnp.mean(q_dist, axis=1)
         q_values = jax.lax.stop_gradient(q_values)
         return QRNetworkOutputs(q_dist=q_dist, q_values=q_values)
+
+    return net_fn
+
+
+def ens_qr_atari_network(
+    num_actions: int, quantiles: jnp.ndarray, ens_size: int
+) -> NetworkFn:
+    """Ensemble QR-DQN network, expects `uint8` input."""
+
+    chex.assert_rank(quantiles, 1)
+    num_quantiles = len(quantiles)
+
+    def net_fn(inputs):
+        """Function representing QR-DQN Q-network."""
+        network = hk.Sequential(
+            [
+                dqn_torso(),
+                dqn_value_head(ens_size * num_quantiles * num_actions),
+            ]
+        )
+        network_output = network(inputs)
+        q_dists = jnp.reshape(
+            network_output, (-1, ens_size, num_quantiles, num_actions)
+        )
+
+        q_dist_means = jnp.mean(q_dists, axis=2)  # mean of each distribution learned
+        q_values = jnp.mean(
+            q_dist_means, axis=1
+        )  # mean of means (over each distribution and then over ensemble)
+        q_values = jax.lax.stop_gradient(q_values)
+
+        q_dist_means_var = jnp.var(
+            q_dist_means, axis=1
+        )  # var of means (mean of each distribution and variance of this over ensemble)
+        q_dist_means_var = jax.lax.stop_gradient(q_dist_means_var)
+
+        q_dist_vars = jnp.var(q_dists, axis=2)  # var of each distribution learned
+        q_dist_vars_mean = jnp.mean(q_dist_vars, axis=1)
+        q_dist_vars_mean = jax.lax.stop_gradient(q_dist_vars_mean)
+        q_dist_vars_var = jnp.var(q_dist_vars, axis=1)
+        q_dist_vars_var = jax.lax.stop_gradient(q_dist_vars_var)
+
+        return EnsQRNetworkOutputs(
+            q_dist=q_dists,
+            q_values=q_values,
+            q_dist_means_var=q_dist_means_var,
+            q_dist_vars_mean=q_dist_vars_mean,
+            q_dist_vars_var=q_dist_vars_var,
+        )
 
     return net_fn
 
