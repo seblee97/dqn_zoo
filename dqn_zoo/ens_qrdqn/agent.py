@@ -35,6 +35,7 @@ from dqn_zoo import replay as replay_lib
 _batch_quantile_q_learning = jax.vmap(
     rlax.quantile_q_learning, in_axes=(0, None, 0, 0, 0, 0, 0, None)
 )
+_select_actions = jax.vmap(lambda q, a: q[a])
 
 
 class EnsQrDqn(parts.Agent):
@@ -91,20 +92,17 @@ class EnsQrDqn(parts.Agent):
             """Calculates loss given network parameters and transitions."""
             # Compute Q value distributions.
             _, online_key, target_key = jax.random.split(rng_key, 3)
-            dist_q_tm1 = network.apply(
-                online_params, online_key, transitions.s_tm1
-            ).q_dist
-            dist_q_target_t = network.apply(
-                target_params, target_key, transitions.s_t
-            ).q_dist
+            dist_q_tm1 = network.apply(online_params, online_key, transitions.s_tm1)
+            dist_q_target_t = network.apply(target_params, target_key, transitions.s_t)
 
             # Batch x Ensemble : Quantiles: Actions
             flattened_dist_q_tm1 = jnp.reshape(
-                dist_q_tm1, (-1, dist_q_tm1.shape[2], dist_q_tm1.shape[3])
+                dist_q_tm1.q_dist,
+                (-1, dist_q_tm1.q_dist.shape[2], dist_q_tm1.q_dist.shape[3]),
             )
             flattened_dist_q_target_t = jnp.reshape(
-                dist_q_target_t,
-                (-1, dist_q_target_t.shape[2], dist_q_target_t.shape[3]),
+                dist_q_target_t.q_dist,
+                (-1, dist_q_target_t.q_dist.shape[2], dist_q_target_t.q_dist.shape[3]),
             )
 
             # Batch x Ensemble
@@ -131,17 +129,48 @@ class EnsQrDqn(parts.Agent):
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = jnp.sum(mask * losses) / jnp.sum(mask)
 
-            return loss
+            # compute logging quantities
+            # mean over batch and actions
+            mean_q_mean = jnp.mean(dist_q_tm1.q_values)
+            mean_q_var = jnp.mean(dist_q_tm1.q_dist_vars_mean)
+            var_q_mean = jnp.mean(dist_q_tm1.q_dist_means_var)
+            var_q_var = jnp.mean(dist_q_tm1.q_dist_vars_var)
+
+            # mean over batch for action chosen)
+            mean_q_mean_select = jnp.mean(
+                _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
+            )
+            mean_q_var_select = jnp.mean(
+                _select_actions(dist_q_tm1.q_dist_vars_mean, transitions.a_tm1)
+            )
+            var_q_mean_select = jnp.mean(
+                _select_actions(dist_q_tm1.q_dist_means_var, transitions.a_tm1)
+            )
+            var_q_var_select = jnp.mean(
+                _select_actions(dist_q_tm1.q_dist_vars_var, transitions.a_tm1)
+            )
+
+            return loss, {
+                "loss": loss,
+                "mean_q_mean": mean_q_mean,
+                "mean_q_var": mean_q_var,
+                "var_q_mean": var_q_mean,
+                "var_q_var": var_q_var,
+                "mean_q_mean_select": mean_q_mean_select,
+                "mean_q_var_select": mean_q_var_select,
+                "var_q_mean_select": var_q_mean_select,
+                "var_q_var_select": var_q_var_select,
+            }
 
         def update(rng_key, opt_state, online_params, target_params, transitions):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
-            d_loss_d_params = jax.grad(loss_fn)(
+            d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
                 online_params, target_params, transitions, update_key
             )
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
-            return rng_key, new_opt_state, new_online_params
+            return rng_key, new_opt_state, new_online_params, aux
 
         self._update = jax.jit(update)
 
@@ -190,12 +219,14 @@ class EnsQrDqn(parts.Agent):
             return action, {}
 
         if self._frame_t % self._learn_period == 0:
-            self._learn()
+            aux = self._learn()
+        else:
+            aux = {}
 
         if self._frame_t % self._target_network_update_period == 0:
             self._target_params = self._online_params
 
-        return action, {}
+        return action, aux
 
     def reset(self) -> None:
         """Resets the agent's episodic state such as frame stack and action repeat.
@@ -220,13 +251,14 @@ class EnsQrDqn(parts.Agent):
         """Samples a batch of transitions from replay and learns from it."""
         logging.log_first_n(logging.INFO, "Begin learning", 1)
         transitions = self._replay.sample(self._batch_size)
-        self._rng_key, self._opt_state, self._online_params = self._update(
+        self._rng_key, self._opt_state, self._online_params, aux = self._update(
             self._rng_key,
             self._opt_state,
             self._online_params,
             self._target_params,
             transitions,
         )
+        return aux
 
     @property
     def online_params(self) -> parts.NetworkParams:
