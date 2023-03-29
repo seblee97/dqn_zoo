@@ -44,9 +44,9 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("environment_name", "pong", "")
 flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
-flags.DEFINE_integer("replay_capacity", int(1e4), "")
+flags.DEFINE_integer("replay_capacity", int(1e6), "")
 flags.DEFINE_bool("compress_state", True, "")
-flags.DEFINE_float("min_replay_capacity_fraction", 0.005, "")
+flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_integer("batch_size", 32, "")
 flags.DEFINE_integer("max_frames_per_episode", 108000, "")  # 30 mins.
 flags.DEFINE_integer("num_action_repeats", 4, "")
@@ -64,8 +64,8 @@ flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_float("max_global_grad_norm", 10.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
 flags.DEFINE_integer("num_iterations", 200, "")
-flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
-flags.DEFINE_integer("num_eval_frames", int(5e3), "")  # Per iteration.
+flags.DEFINE_integer("num_train_frames", int(1e6), "")  # Per iteration.
+flags.DEFINE_integer("num_eval_frames", int(5e5), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 
@@ -248,6 +248,16 @@ def main(argv):
             FLAGS.environment_name, eval_stats["episode_return"]
         )
         capped_human_normalized_score = np.amin([1.0, human_normalized_score])
+
+        if train_stats["num_episodes"] == 0:
+            train_episode_length = np.nan
+        else:
+            train_episode_length = FLAGS.num_train_frames / train_stats["num_episodes"]
+        if eval_stats["num_episodes"] == 0:
+            eval_episode_length = np.nan
+        else:
+            eval_episode_length = FLAGS.num_train_frames / eval_stats["num_episodes"]
+
         log_output = [
             ("iteration", state.iteration, "%3d"),
             ("frame", state.iteration * FLAGS.num_train_frames, "%5d"),
@@ -262,6 +272,30 @@ def main(argv):
             ("normalized_return", human_normalized_score, "%.3f"),
             ("capped_normalized_return", capped_human_normalized_score, "%.3f"),
             ("human_gap", 1.0 - capped_human_normalized_score, "%.3f"),
+            ("train_loss", train_stats["_loss"], "%.5f"),
+            ("eval_loss", eval_stats["_loss"], "%.5f"),
+            (
+                "train_episode_length",
+                train_episode_length,
+                "%.2f",
+            ),
+            (
+                "eval_episode_length",
+                eval_episode_length,
+                "%.2f",
+            ),
+            ("mean_q_mean", train_stats.get("mean_q_mean", np.nan), "%.3f"),
+            ("mean_q_var", train_stats.get("mean_q_var", np.nan), "%.3f"),
+            ("var_q_mean", train_stats.get("var_q_mean", np.nan), "%.3f"),
+            ("var_q_var", train_stats.get("var_q_var", np.nan), "%.3f"),
+            (
+                "mean_q_mean_select",
+                train_stats.get("mean_q_mean_select", np.nan),
+                "%.3f",
+            ),
+            ("mean_q_var_select", train_stats.get("mean_q_var_select", np.nan), "%.3f"),
+            ("var_q_mean_select", train_stats.get("var_q_mean_select", np.nan), "%.3f"),
+            ("var_q_var_select", train_stats.get("var_q_var_select", np.nan), "%.3f"),
         ]
         log_output_str = ", ".join(("%s: " + f) % (n, v) for n, v, f in log_output)
         logging.info(log_output_str)
