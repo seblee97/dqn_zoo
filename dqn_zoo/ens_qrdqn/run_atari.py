@@ -21,8 +21,11 @@ http://arxiv.org/abs/1710.10044.
 # pylint: disable=g-bad-import-order
 
 import collections
+import datetime
 import itertools
+import os
 import sys
+import time
 import typing
 
 import chex
@@ -67,7 +70,8 @@ flags.DEFINE_integer("num_iterations", 200, "")
 flags.DEFINE_integer("num_train_frames", int(1e6), "")  # Per iteration.
 flags.DEFINE_integer("num_eval_frames", int(5e5), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
-flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
+# flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
+flags.DEFINE_string("results_path", None, "")  # where to store results
 
 flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
@@ -82,11 +86,6 @@ def main(argv):
     rng_key = jax.random.PRNGKey(
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
     )
-
-    if FLAGS.results_csv_path:
-        writer = parts.CsvWriter(FLAGS.results_csv_path)
-    else:
-        writer = parts.NullWriter()
 
     def environment_builder():
         """Creates Atari environment."""
@@ -188,6 +187,18 @@ def main(argv):
 
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
+    # create timestamp for logging and checkpoint path
+    if FLAGS.results_path is None:
+        raw_datetime = datetime.datetime.fromtimestamp(time.time())
+        exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+        exp_path = os.path.join("results", exp_timestamp)
+        os.makedirs(exp_path, exist_ok=True)
+    else:
+        exp_path = FLAGS.results_path
+
+    visualisation_path = os.path.join(exp_path, "visualisations")
+    os.makedirs(visualisation_path, exist_ok=True)
+
     train_agent = agent.EnsQrDqn(
         preprocessor=preprocessor_builder(),
         sample_network_input=sample_network_input,
@@ -213,8 +224,19 @@ def main(argv):
         rng_key=eval_rng_key,
     )
 
-    # Set up checkpointing.
-    checkpoint = parts.NullCheckpoint()
+    # setup writer
+    writer = parts.CsvWriter(os.path.join(exp_path, "writer.csv"))
+
+    # setup checkpointing.
+    checkpoint = parts.ImplementedCheckpoint(
+        checkpoint_path=os.path.join(exp_path, "checkpoint.pkl")
+    )
+
+    if checkpoint.can_be_restored():
+        checkpoint.restore()
+        train_agent.set_state(state=checkpoint.state.train_agent)
+        eval_agent.set_state(state=checkpoint.state.eval_agent)
+        writer.set_state(state=checkpoint.state.writer)
 
     state = checkpoint.state
     state.iteration = 0
@@ -301,7 +323,7 @@ def main(argv):
         logging.info(log_output_str)
         writer.write(collections.OrderedDict((n, v) for n, v, _ in log_output))
         state.iteration += 1
-        checkpoint.save()
+        # checkpoint.save()
 
     writer.close()
 
