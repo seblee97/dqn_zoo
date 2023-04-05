@@ -349,7 +349,7 @@ def ens_qr_atari_network(
             network_output, (-1, ens_size, num_quantiles, num_actions)
         )
 
-        q_dist_means = jnp.mean(q_dists, axis=2)  # mean of each distribution learned
+        q_dist_means = jnp.mean(q_dists, axis=1)  # mean of each distribution learned
         q_values = jnp.mean(
             q_dist_means, axis=1
         )  # mean of means (over each distribution and then over ensemble)
@@ -360,7 +360,7 @@ def ens_qr_atari_network(
         )  # var of means (mean of each distribution and variance of this over ensemble)
         q_dist_means_var = jax.lax.stop_gradient(q_dist_means_var)
 
-        q_dist_vars = jnp.var(q_dists, axis=2)  # var of each distribution learned
+        q_dist_vars = jnp.var(q_dists, axis=1)  # var of each distribution learned
         q_dist_vars_mean = jnp.mean(q_dist_vars, axis=1)
         q_dist_vars_mean = jax.lax.stop_gradient(q_dist_vars_mean)
         q_dist_vars_var = jnp.var(q_dist_vars, axis=1)
