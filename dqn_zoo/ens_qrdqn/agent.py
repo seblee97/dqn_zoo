@@ -50,6 +50,7 @@ class EnsQrDqn(parts.Agent):
         optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.TransitionReplay,
+        prioritise: bool,
         mask_probability: float,
         ens_size: int,
         batch_size: int,
@@ -62,6 +63,7 @@ class EnsQrDqn(parts.Agent):
     ):
         self._preprocessor = preprocessor
         self._replay = replay
+        self._prioritise = prioritise
         self._transition_accumulator = transition_accumulator
         self._mask_probabilities = jnp.array([mask_probability, 1 - mask_probability])
         self._ens_size = ens_size
@@ -83,12 +85,13 @@ class EnsQrDqn(parts.Agent):
         self._action = None
         self._frame_t = -1  # Current frame index.
         self._statistics = {"state_value": np.nan}
+        self._max_seen_priority = 1.0
 
         # Define jitted loss, update, and policy functions here instead of as
         # class methods, to emphasize that these are meant to be pure functions
         # and should not access the agent object's state via `self`.
 
-        def loss_fn(online_params, target_params, transitions, rng_key):
+        def loss_fn(online_params, target_params, transitions, weights, rng_key):
             """Calculates loss given network parameters and transitions."""
             # Compute Q value distributions.
             _, online_key, target_key = jax.random.split(rng_key, 3)
@@ -108,6 +111,7 @@ class EnsQrDqn(parts.Agent):
             # Batch x Ensemble
             repeated_actions = jnp.repeat(transitions.a_tm1, ens_size)
             repeated_discounts = jnp.repeat(transitions.discount_t, ens_size)
+            repeated_weights = jnp.repeat(weights, ens_size)
 
             if transitions.r_t.shape == repeated_actions.shape:
                 repeated_rewards = transitions.r_t
@@ -124,30 +128,31 @@ class EnsQrDqn(parts.Agent):
                 flattened_dist_q_target_t,
                 huber_param,
             )
-            chex.assert_shape(losses, (self._batch_size * ens_size,))
+
+            chex.assert_shape(
+                (losses, repeated_weights), (self._batch_size * ens_size,)
+            )
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
-            loss = jnp.sum(mask * losses) / jnp.sum(mask)
+            loss = jnp.sum(mask * repeated_weights * losses) / jnp.sum(mask)
 
             # compute logging quantities
-            # mean over batch and actions
-            mean_q_mean = jnp.mean(dist_q_tm1.q_values)
-            mean_q_var = jnp.mean(dist_q_tm1.q_dist_vars_mean)
-            var_q_mean = jnp.mean(dist_q_tm1.q_dist_means_var)
-            var_q_var = jnp.mean(dist_q_tm1.q_dist_vars_var)
+            # mean over actions
+            mean_q_mean = jnp.mean(dist_q_tm1.q_values, axis=1)
+            mean_q_var = jnp.mean(dist_q_tm1.q_dist_vars_mean, axis=1)
+            var_q_mean = jnp.mean(dist_q_tm1.q_dist_means_var, axis=1)
+            var_q_var = jnp.mean(dist_q_tm1.q_dist_vars_var, axis=1)
 
-            # mean over batch for action chosen)
-            mean_q_mean_select = jnp.mean(
-                _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
+            # quantities of action chosen
+            mean_q_mean_select = _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
+            mean_q_var_select = _select_actions(
+                dist_q_tm1.q_dist_vars_mean, transitions.a_tm1
             )
-            mean_q_var_select = jnp.mean(
-                _select_actions(dist_q_tm1.q_dist_vars_mean, transitions.a_tm1)
+            var_q_mean_select = _select_actions(
+                dist_q_tm1.q_dist_means_var, transitions.a_tm1
             )
-            var_q_mean_select = jnp.mean(
-                _select_actions(dist_q_tm1.q_dist_means_var, transitions.a_tm1)
-            )
-            var_q_var_select = jnp.mean(
-                _select_actions(dist_q_tm1.q_dist_vars_var, transitions.a_tm1)
+            var_q_var_select = _select_actions(
+                dist_q_tm1.q_dist_vars_var, transitions.a_tm1
             )
 
             return loss, {
@@ -162,11 +167,13 @@ class EnsQrDqn(parts.Agent):
                 "var_q_var_select": var_q_var_select,
             }
 
-        def update(rng_key, opt_state, online_params, target_params, transitions):
+        def update(
+            rng_key, opt_state, online_params, target_params, transitions, weights
+        ):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
             d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
-                online_params, target_params, transitions, update_key
+                online_params, target_params, transitions, weights, update_key
             )
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
@@ -213,7 +220,10 @@ class EnsQrDqn(parts.Agent):
                     s_t=transition.s_t,
                     mask_t=mask,
                 )
-                self._replay.add(transition)
+                if self._prioritise:
+                    self._replay.add(transition, priority=self._max_seen_priority)
+                else:
+                    self._replay.add(transition)
 
         if self._replay.size < self._min_replay_capacity:
             return action, {}
@@ -250,14 +260,35 @@ class EnsQrDqn(parts.Agent):
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
         logging.log_first_n(logging.INFO, "Begin learning", 1)
-        transitions = self._replay.sample(self._batch_size)
-        self._rng_key, self._opt_state, self._online_params, aux = self._update(
-            self._rng_key,
-            self._opt_state,
-            self._online_params,
-            self._target_params,
-            transitions,
-        )
+        if self._prioritise:
+            transitions, indices, weights = self._replay.sample(self._batch_size)
+            self._rng_key, self._opt_state, self._online_params, aux = self._update(
+                self._rng_key,
+                self._opt_state,
+                self._online_params,
+                self._target_params,
+                transitions,
+                weights,
+            )
+        else:
+            transitions = self._replay.sample(self._batch_size)
+            self._rng_key, self._opt_state, self._online_params, aux = self._update(
+                self._rng_key,
+                self._opt_state,
+                self._online_params,
+                self._target_params,
+                transitions,
+            )
+        if self._prioritise:
+            chex.assert_equal_shape((weights, aux["mean_q_var"]))
+            priorities = jnp.abs(aux["mean_q_var"])
+            priorities = jax.device_get(priorities)
+            max_priority = priorities.max()
+            self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
+            self._replay.update_priorities(indices, priorities)
+
+        aux = {k: jnp.mean(v) for k, v in aux.items()}
+
         return aux
 
     @property
