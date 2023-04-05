@@ -47,7 +47,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("environment_name", "pong", "")
 flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
-flags.DEFINE_integer("replay_capacity", int(1e6), "")
+flags.DEFINE_integer("replay_capacity", int(1e4), "")
 flags.DEFINE_bool("compress_state", True, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_integer("batch_size", 32, "")
@@ -67,8 +67,8 @@ flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_float("max_global_grad_norm", 10.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
 flags.DEFINE_integer("num_iterations", 200, "")
-flags.DEFINE_integer("num_train_frames", int(1e6), "")  # Per iteration.
-flags.DEFINE_integer("num_eval_frames", int(5e5), "")  # Per iteration.
+flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
+flags.DEFINE_integer("num_eval_frames", int(5e3), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 flags.DEFINE_string("results_path", None, "")  # where to store results
@@ -76,6 +76,13 @@ flags.DEFINE_string("results_path", None, "")  # where to store results
 flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
 flags.DEFINE_float("mask_probability", 0.5, "")
+
+flags.DEFINE_bool("prioritise", True, "")
+flags.DEFINE_float("priority_exponent", 0.6, "")
+flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
+flags.DEFINE_float("importance_sampling_exponent_end_value", 1.0, "")
+flags.DEFINE_float("uniform_sample_probability", 1e-3, "")
+flags.DEFINE_bool("normalize_weights", True, "")
 
 
 def main(argv):
@@ -173,9 +180,31 @@ def main(argv):
         mask_t=None,
     )
 
-    replay = replay_lib.TransitionReplay(
-        FLAGS.replay_capacity, replay_structure, random_state, encoder, decoder
-    )
+    if FLAGS.prioritise:
+        importance_sampling_exponent_schedule = parts.LinearSchedule(
+            begin_t=int(FLAGS.min_replay_capacity_fraction * FLAGS.replay_capacity),
+            end_t=(
+                FLAGS.num_iterations
+                * int(FLAGS.num_train_frames / FLAGS.num_action_repeats)
+            ),
+            begin_value=FLAGS.importance_sampling_exponent_begin_value,
+            end_value=FLAGS.importance_sampling_exponent_end_value,
+        )
+        replay = replay_lib.PrioritizedTransitionReplay(
+            FLAGS.replay_capacity,
+            replay_structure,
+            FLAGS.priority_exponent,
+            importance_sampling_exponent_schedule,
+            FLAGS.uniform_sample_probability,
+            FLAGS.normalize_weights,
+            random_state,
+            encoder,
+            decoder,
+        )
+    else:
+        replay = replay_lib.TransitionReplay(
+            FLAGS.replay_capacity, replay_structure, random_state, encoder, decoder
+        )
 
     optimizer = optax.adam(
         learning_rate=FLAGS.learning_rate, eps=FLAGS.optimizer_epsilon
@@ -207,6 +236,7 @@ def main(argv):
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
+        prioritise=FLAGS.prioritise,
         ens_size=FLAGS.ens_size,
         mask_probability=FLAGS.mask_probability,
         batch_size=FLAGS.batch_size,
