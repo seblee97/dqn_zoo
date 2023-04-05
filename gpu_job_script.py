@@ -27,7 +27,7 @@ def _generate_script(
     output_path = os.path.join(exp_path, "output.txt")
     error_path = os.path.join(exp_path, "error.txt")
 
-    run_command = f"python -m dqn_zoo.{algo}.run_key_door --results_path={exp_path} "
+    run_command = f"python -m dqn_zoo.{algo}.run_{game} --results_path={exp_path} "
 
     if game == "key_door":
 
