@@ -13,10 +13,11 @@ parser.add_argument("--mem", default=32)
 parser.add_argument("--timeout", default="0-120:00")
 parser.add_argument("--game", default="atari")
 parser.add_argument("--dqn_algorithm", default="bootstrapped_dqn")
+parser.add_argument("--seed", default=1)
 
 
 def _generate_script(
-    num_nodes: int, num_gpus: int, mem: int, timeout: str, algo: str, game: str
+    num_nodes: int, num_gpus: int, mem: int, timeout: str, algo: str, game: str, seed: int
 ):
 
     raw_datetime = datetime.datetime.fromtimestamp(time.time())
@@ -27,7 +28,7 @@ def _generate_script(
     output_path = os.path.join(exp_path, "output.txt")
     error_path = os.path.join(exp_path, "error.txt")
 
-    run_command = f"python -m dqn_zoo.{algo}.run_{game} --results_path={exp_path} "
+    run_command = f"python -m dqn_zoo.{algo}.run_{game} --results_path={exp_path} --seed={seed} "
 
     if game == "key_door":
 
@@ -77,5 +78,6 @@ if __name__ == "__main__":
         timeout=args.timeout,
         algo=args.dqn_algorithm,
         game=args.game,
+        seed=args.seed
     )
     subprocess.call(f"sbatch {script_path}", shell=True)
