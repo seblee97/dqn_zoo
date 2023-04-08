@@ -138,33 +138,29 @@ class EnsQrDqn(parts.Agent):
 
             # compute logging quantities
             # mean over actions
-            mean_q_mean = jnp.mean(dist_q_tm1.q_values, axis=1)
-            mean_q_var = jnp.mean(dist_q_tm1.q_dist_vars_mean, axis=1)
-            var_q_mean = jnp.mean(dist_q_tm1.q_dist_means_var, axis=1)
-            var_q_var = jnp.mean(dist_q_tm1.q_dist_vars_var, axis=1)
+            mean_q = jnp.mean(dist_q_tm1.q_values, axis=1)
+            mean_q_var = jnp.mean(dist_q_tm1.q_values_var, axis=1)
+            mean_epistemic = jnp.mean(dist_q_tm1.epistemic_uncertainty, axis=1)
+            mean_aleatoric = jnp.mean(dist_q_tm1.aleatoric_uncertainty, axis=1)
 
             # quantities of action chosen
-            mean_q_mean_select = _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
-            mean_q_var_select = _select_actions(
-                dist_q_tm1.q_dist_vars_mean, transitions.a_tm1
+            q_select = _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
+            q_var_select = _select_actions(
+                dist_q_tm1.q_values_var, transitions.a_tm1
             )
-            var_q_mean_select = _select_actions(
-                dist_q_tm1.q_dist_means_var, transitions.a_tm1
-            )
-            var_q_var_select = _select_actions(
-                dist_q_tm1.q_dist_vars_var, transitions.a_tm1
-            )
+            epistemic_select = _select_actions(dist_q_tm1.epistemic_uncertainty, transitions.a_tm1)
+            aleatoric_select = _select_actions(dist_q_tm1.aleatoric_uncertainty, transitions.a_tm1)
 
             return loss, {
                 "loss": loss,
-                "mean_q_mean": mean_q_mean,
+                "mean_q": mean_q,
                 "mean_q_var": mean_q_var,
-                "var_q_mean": var_q_mean,
-                "var_q_var": var_q_var,
-                "mean_q_mean_select": mean_q_mean_select,
-                "mean_q_var_select": mean_q_var_select,
-                "var_q_mean_select": var_q_mean_select,
-                "var_q_var_select": var_q_var_select,
+                "mean_epistemic": mean_epistemic,
+                "mean_aleatoric": mean_aleatoric,
+                "q_select": q_select,
+                "q_var_select": q_var_select,
+                "epistemic_select": epistemic_select,
+                "aleatoric_select": aleatoric_select,
             }
 
         def update(
@@ -280,8 +276,8 @@ class EnsQrDqn(parts.Agent):
                 transitions,
             )
         if self._prioritise:
-            chex.assert_equal_shape((weights, aux["mean_q_var"]))
-            priorities = jnp.abs(aux["mean_q_var"])
+            chex.assert_equal_shape((weights, aux["mean_epistemic"]))
+            priorities = jnp.abs(aux["mean_epistemic"])
             priorities = jax.device_get(priorities)
             max_priority = priorities.max()
             self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
