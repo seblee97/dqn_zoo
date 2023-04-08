@@ -336,18 +336,18 @@ def main(argv):
                 eval_episode_length,
                 "%.2f",
             ),
-            ("mean_q_mean", train_stats.get("mean_q_mean", np.nan), "%.3f"),
+            ("mean_q", train_stats.get("mean_q", np.nan), "%.3f"),
             ("mean_q_var", train_stats.get("mean_q_var", np.nan), "%.3f"),
-            ("var_q_mean", train_stats.get("var_q_mean", np.nan), "%.3f"),
-            ("var_q_var", train_stats.get("var_q_var", np.nan), "%.3f"),
+            ("mean_epistemic", train_stats.get("mean_epistemic", np.nan), "%.3f"),
+            ("mean_aleatoric", train_stats.get("mean_aleatoric", np.nan), "%.3f"),
             (
-                "mean_q_mean_select",
-                train_stats.get("mean_q_mean_select", np.nan),
+                "q_select",
+                train_stats.get("q_select", np.nan),
                 "%.3f",
             ),
-            ("mean_q_var_select", train_stats.get("mean_q_var_select", np.nan), "%.3f"),
-            ("var_q_mean_select", train_stats.get("var_q_mean_select", np.nan), "%.3f"),
-            ("var_q_var_select", train_stats.get("var_q_var_select", np.nan), "%.3f"),
+            ("q_var_select", train_stats.get("q_var_select", np.nan), "%.3f"),
+            ("epistemic_select", train_stats.get("epistemic_select", np.nan), "%.3f"),
+            ("aleatoric_select", train_stats.get("aleatoric_select", np.nan), "%.3f"),
         ]
         log_output_str = ", ".join(("%s: " + f) % (n, v) for n, v, f in log_output)
         logging.info(log_output_str)
