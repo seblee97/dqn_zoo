@@ -58,9 +58,9 @@ class QRNetworkOutputs(typing.NamedTuple):
 class EnsQRNetworkOutputs(typing.NamedTuple):
     q_values: jnp.ndarray
     q_dist: jnp.ndarray
-    q_dist_means_var: jnp.ndarray
-    q_dist_vars_mean: jnp.ndarray
-    q_dist_vars_var: jnp.ndarray
+    q_values_var: jnp.ndarray
+    aleatoric_uncertainty: jnp.ndarray
+    epistemic_uncertainty: jnp.ndarray
 
 
 class C51NetworkOutputs(typing.NamedTuple):
@@ -345,33 +345,38 @@ def ens_qr_atari_network(
             ]
         )
         network_output = network(inputs)
-        q_dists = jnp.reshape(
+        full_q = jnp.reshape(
             network_output, (-1, ens_size, num_quantiles, num_actions)
         )
 
-        q_dist_means = jnp.mean(q_dists, axis=1)  # mean of each distribution learned
+        # Batch x Quantiles x Actions
+        q_dist_means = jnp.mean(full_q, axis=1)  # mean over ensemble dimension
+        # Batch x Actions
         q_values = jnp.mean(
             q_dist_means, axis=1
-        )  # mean of means (over each distribution and then over ensemble)
+        )  # mean over quantiles
+        aleatoric_uncertainty = jnp.var(q_dist_means, axis=1) # var over quantiles
+
+        # Batch x Quantiles x Actions
+        q_dist_vars = jnp.var(full_q, axis=1)  # variance over ensemble dimension
+        # Batch x Actions
+        epistemic_uncertainty = jnp.mean(q_dist_vars, axis=1)
+
+        # Batch x Ensemble x Actions
+        q_dists = jnp.mean(full_q, axis=2) # mean over quantile dimension
+        q_values_var = jnp.var(q_dists, axis=1) # variance over ensemble dimension
+
         q_values = jax.lax.stop_gradient(q_values)
-
-        q_dist_means_var = jnp.var(
-            q_dist_means, axis=1
-        )  # var of means (mean of each distribution and variance of this over ensemble)
-        q_dist_means_var = jax.lax.stop_gradient(q_dist_means_var)
-
-        q_dist_vars = jnp.var(q_dists, axis=1)  # var of each distribution learned
-        q_dist_vars_mean = jnp.mean(q_dist_vars, axis=1)
-        q_dist_vars_mean = jax.lax.stop_gradient(q_dist_vars_mean)
-        q_dist_vars_var = jnp.var(q_dist_vars, axis=1)
-        q_dist_vars_var = jax.lax.stop_gradient(q_dist_vars_var)
+        q_values_var = jax.lax.stop_gradient(q_values_var)
+        aleatoric_uncertainty = jax.lax.stop_gradient(aleatoric_uncertainty)
+        epistemic_uncertainty = jax.lax.stop_gradient(epistemic_uncertainty)
 
         return EnsQRNetworkOutputs(
-            q_dist=q_dists,
+            q_dist=full_q,
             q_values=q_values,
-            q_dist_means_var=q_dist_means_var,
-            q_dist_vars_mean=q_dist_vars_mean,
-            q_dist_vars_var=q_dist_vars_var,
+            q_values_var=q_values_var,
+            aleatoric_uncertainty=aleatoric_uncertainty,
+            epistemic_uncertainty=epistemic_uncertainty
         )
 
     return net_fn
