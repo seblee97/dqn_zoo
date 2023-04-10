@@ -111,7 +111,9 @@ class EnsQrDqn(parts.Agent):
             # Batch x Ensemble
             repeated_actions = jnp.repeat(transitions.a_tm1, ens_size)
             repeated_discounts = jnp.repeat(transitions.discount_t, ens_size)
-            repeated_weights = jnp.repeat(weights, ens_size)
+
+            if weights is not None:
+                repeated_weights = jnp.repeat(weights, ens_size)
 
             if transitions.r_t.shape == repeated_actions.shape:
                 repeated_rewards = transitions.r_t
@@ -130,11 +132,20 @@ class EnsQrDqn(parts.Agent):
             )
 
             chex.assert_shape(
-                (losses, repeated_weights), (self._batch_size * ens_size,)
+                (losses), (self._batch_size * ens_size,)
             )
+            if weights is not None:
+                chex.assert_shape(
+                    (repeated_weights), (self._batch_size * ens_size,)
+                )
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
-            loss = jnp.sum(mask * repeated_weights * losses) / jnp.sum(mask)
+            loss = mask * losses
+            
+            if weights is not None:
+                loss = repeated_weights * loss 
+                
+            loss = jnp.sum(loss) / jnp.sum(mask)
 
             # compute logging quantities
             # mean over actions
@@ -274,6 +285,7 @@ class EnsQrDqn(parts.Agent):
                 self._online_params,
                 self._target_params,
                 transitions,
+                None
             )
         if self._prioritise:
             chex.assert_equal_shape((weights, aux["mean_epistemic"]))
