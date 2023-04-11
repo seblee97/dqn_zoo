@@ -47,7 +47,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("environment_name", "pong", "")
 flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
-flags.DEFINE_integer("replay_capacity", int(1e6), "")
+flags.DEFINE_integer("replay_capacity", int(1e4), "")
 flags.DEFINE_bool("compress_state", True, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_integer("batch_size", 32, "")
@@ -67,8 +67,8 @@ flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_float("max_global_grad_norm", 10.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
 flags.DEFINE_integer("num_iterations", 200, "")
-flags.DEFINE_integer("num_train_frames", int(1e6), "")  # Per iteration.
-flags.DEFINE_integer("num_eval_frames", int(5e5), "")  # Per iteration.
+flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
+flags.DEFINE_integer("num_eval_frames", int(5e3), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 flags.DEFINE_string("results_path", None, "")  # where to store results
@@ -77,7 +77,7 @@ flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
 flags.DEFINE_float("mask_probability", 0.5, "")
 
-flags.DEFINE_bool("prioritise", True, "")
+flags.DEFINE_bool("prioritise", False, "")
 flags.DEFINE_float("priority_exponent", 0.6, "")
 flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
 flags.DEFINE_float("importance_sampling_exponent_end_value", 1.0, "")
@@ -224,6 +224,10 @@ def main(argv):
         os.makedirs(exp_path, exist_ok=True)
     else:
         exp_path = FLAGS.results_path
+
+    flag_dict = FLAGS.flag_values_dict()
+    with open(os.path.join(exp_path, "flags.json"), "+w") as json_file:
+        json.dump(flag_dict, json_file, indent=6)
 
     visualisation_path = os.path.join(exp_path, "visualisations")
     os.makedirs(visualisation_path, exist_ok=True)
