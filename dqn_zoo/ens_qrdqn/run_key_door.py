@@ -293,9 +293,6 @@ def main(argv):
     else:
         exp_path = FLAGS.results_path
 
-    visualisation_path = os.path.join(exp_path, "visualisations")
-    os.makedirs(visualisation_path, exist_ok=True)
-
     train_agent = agent.EnsQrDqn(
         preprocessor=preprocessor_builder(),
         sample_network_input=sample_network_input,
@@ -347,7 +344,9 @@ def main(argv):
 
     while state.iteration <= FLAGS.num_iterations:
         # New environment for each iteration to allow for determinism if preempted.
-        env = environment_builder()
+        if state.iteration == 0:
+            env = environment_builder(train_index=0, test_index=0)
+        # env = environment_builder()
 
         logging.info("Training iteration %d.", state.iteration)
         train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
@@ -377,7 +376,6 @@ def main(argv):
             eval_episode_length = np.nan
         else:
             eval_episode_length = FLAGS.num_train_frames / eval_stats["num_episodes"]
-
         log_output = [
             ("iteration", state.iteration, "%3d"),
             ("frame", state.iteration * FLAGS.num_train_frames, "%5d"),
