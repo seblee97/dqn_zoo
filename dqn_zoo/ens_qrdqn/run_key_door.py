@@ -90,7 +90,7 @@ flags.DEFINE_list(
 )
 flags.DEFINE_multi_integer(
     "transition_episodes",
-    (10, 20),
+    (200000, 400000),
     "Episode number at which environment context switches. Should have same dimension as map_yaml_paths",
 )
 flags.DEFINE_integer("env_scaling", 8, "")
