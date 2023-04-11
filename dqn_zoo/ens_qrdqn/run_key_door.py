@@ -54,24 +54,24 @@ flags.DEFINE_bool("compress_state", True, "")
 flags.DEFINE_bool("grayscale", False, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_integer("batch_size", 32, "")
-flags.DEFINE_integer("max_frames_per_episode", 108000, "")  # 30 mins.
-flags.DEFINE_integer("num_action_repeats", 4, "")
+flags.DEFINE_integer("max_frames_per_episode", 800, "")  # 30 mins.
+flags.DEFINE_integer("num_action_repeats", 1, "")
 flags.DEFINE_integer("num_stacked_frames", 4, "")
 flags.DEFINE_float("exploration_epsilon_begin_value", 1.0, "")
-flags.DEFINE_float("exploration_epsilon_end_value", 0.01, "")
+flags.DEFINE_float("exploration_epsilon_end_value", 0.1, "")
 flags.DEFINE_float("exploration_epsilon_decay_frame_fraction", 0.02, "")
-flags.DEFINE_float("eval_exploration_epsilon", 0.001, "")
-flags.DEFINE_integer("target_network_update_period", int(4e4), "")
+flags.DEFINE_float("eval_exploration_epsilon", 0.05, "")
+flags.DEFINE_integer("target_network_update_period", int(1e4), "")
 flags.DEFINE_float("huber_param", 1.0, "")
-flags.DEFINE_float("learning_rate", 0.00001, "")
+flags.DEFINE_float("learning_rate", 0.00025, "")
 flags.DEFINE_float("optimizer_epsilon", 0.01 / 32, "")
 flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_float("max_global_grad_norm", 10.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
-flags.DEFINE_integer("num_iterations", 200, "")
-flags.DEFINE_integer("num_train_frames", int(1e6), "")  # Per iteration.
-flags.DEFINE_integer("num_eval_frames", int(5e5), "")  # Per iteration.
+flags.DEFINE_integer("num_iterations", 3000, "")
+flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
+flags.DEFINE_integer("num_eval_frames", int(1e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 flags.DEFINE_string("results_path", None, "")  # where to store results
@@ -83,7 +83,8 @@ flags.DEFINE_list(
     "map_yaml_paths",
     [
         "dqn_zoo/key_door_maps/multi_room_bandit.yaml",
-        "dqn_zoo/key_door_maps/multi_room_bandit.yaml",
+        "dqn_zoo/key_door_maps/multi_room_bandit_1.yaml",
+        "dqn_zoo/key_door_maps/multi_room_bandit_2.yaml",
     ],
     "Set of yaml paths that define different contexts. Used only if apply_curriculum is True",
 )
