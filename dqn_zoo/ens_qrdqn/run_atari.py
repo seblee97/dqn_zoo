@@ -27,6 +27,7 @@ import os
 import sys
 import time
 import typing
+import json
 
 import chex
 import dm_env
