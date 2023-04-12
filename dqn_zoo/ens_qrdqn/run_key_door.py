@@ -64,7 +64,7 @@ flags.DEFINE_float("eval_exploration_epsilon", 0.05, "")
 flags.DEFINE_integer("target_network_update_period", int(1e4), "")
 flags.DEFINE_float("huber_param", 1.0, "")
 flags.DEFINE_float("learning_rate", 0.00025, "")
-flags.DEFINE_float("optimizer_epsilon", 0.01 / 32, "")
+flags.DEFINE_float("optimizer_epsilon", 0.01 / 32**2, "")
 flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_float("max_global_grad_norm", 10.0, "")
@@ -72,7 +72,7 @@ flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
 flags.DEFINE_integer("num_iterations", 3000, "")
 flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
 flags.DEFINE_integer("num_eval_frames", int(1e4), "")  # Per iteration.
-flags.DEFINE_integer("learn_period", 16, "")
+flags.DEFINE_integer("learn_period", 4, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 flags.DEFINE_string("results_path", None, "")  # where to store results
 
@@ -100,7 +100,7 @@ flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
 flags.DEFINE_float("mask_probability", 0.5, "")
 
-flags.DEFINE_bool("prioritise", True, "")
+flags.DEFINE_bool("prioritise", False, "")
 flags.DEFINE_float("priority_exponent", 0.6, "")
 flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
 flags.DEFINE_float("importance_sampling_exponent_end_value", 1.0, "")
