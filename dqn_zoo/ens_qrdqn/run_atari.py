@@ -78,7 +78,7 @@ flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
 flags.DEFINE_float("mask_probability", 0.5, "")
 
-flags.DEFINE_bool("prioritise", False, "")
+flags.DEFINE_string("prioritise", None, "")
 flags.DEFINE_float("priority_exponent", 0.6, "")
 flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
 flags.DEFINE_float("importance_sampling_exponent_end_value", 1.0, "")
@@ -181,7 +181,7 @@ def main(argv):
         mask_t=None,
     )
 
-    if FLAGS.prioritise:
+    if FLAGS.prioritise is not None:
         importance_sampling_exponent_schedule = parts.LinearSchedule(
             begin_t=int(FLAGS.min_replay_capacity_fraction * FLAGS.replay_capacity),
             end_t=(
@@ -341,6 +341,7 @@ def main(argv):
                 eval_episode_length,
                 "%.2f",
             ),
+            ("td_errors", train_stats.get("mean_q", np.nan), "%.3f"),
             ("mean_q", train_stats.get("mean_q", np.nan), "%.3f"),
             ("mean_q_var", train_stats.get("mean_q_var", np.nan), "%.3f"),
             ("mean_epistemic", train_stats.get("mean_epistemic", np.nan), "%.3f"),
