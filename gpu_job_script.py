@@ -14,10 +14,18 @@ parser.add_argument("--timeout", default="0-120:00")
 parser.add_argument("--game", default="atari")
 parser.add_argument("--dqn_algorithm", default="bootstrapped_dqn")
 parser.add_argument("--seed", default=1)
+parser.add_argument("--priority", default=None)
 
 
 def _generate_script(
-    num_nodes: int, num_gpus: int, mem: int, timeout: str, algo: str, game: str, seed: int
+    num_nodes: int,
+    num_gpus: int,
+    mem: int,
+    timeout: str,
+    algo: str,
+    game: str,
+    seed: int,
+    priority: str,
 ):
 
     raw_datetime = datetime.datetime.fromtimestamp(time.time())
@@ -28,7 +36,9 @@ def _generate_script(
     output_path = os.path.join(exp_path, "output.txt")
     error_path = os.path.join(exp_path, "error.txt")
 
-    run_command = f"python -m dqn_zoo.{algo}.run_{game} --results_path={exp_path} --seed={seed} "
+    run_command = (
+        f"python -m dqn_zoo.{algo}.run_{game} --results_path={exp_path} --seed={seed} "
+    )
 
     if game == "key_door":
 
@@ -51,6 +61,9 @@ def _generate_script(
             f"--map_ascii_path={map_ascii_path} --map_yaml_path={map_yaml_path} "
             f"--map_yaml_paths={map_yaml_paths}"
         )
+
+    if priority is not None:
+        run_command += f"--prioritise={priority}"
 
     script_path = os.path.join(exp_path, "script")
 
@@ -78,6 +91,7 @@ if __name__ == "__main__":
         timeout=args.timeout,
         algo=args.dqn_algorithm,
         game=args.game,
-        seed=args.seed
+        seed=args.seed,
+        priority=args.priority,
     )
     subprocess.call(f"sbatch {script_path}", shell=True)
