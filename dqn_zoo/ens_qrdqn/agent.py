@@ -50,7 +50,7 @@ class EnsQrDqn(parts.Agent):
         optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.TransitionReplay,
-        prioritise: bool,
+        prioritise: str,
         mask_probability: float,
         ens_size: int,
         batch_size: int,
@@ -131,20 +131,16 @@ class EnsQrDqn(parts.Agent):
                 huber_param,
             )
 
-            chex.assert_shape(
-                (losses), (self._batch_size * ens_size,)
-            )
+            chex.assert_shape((losses), (self._batch_size * ens_size,))
             if weights is not None:
-                chex.assert_shape(
-                    (repeated_weights), (self._batch_size * ens_size,)
-                )
+                chex.assert_shape((repeated_weights), (self._batch_size * ens_size,))
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = mask * losses
             
             if weights is not None:
-                loss = repeated_weights * loss 
-                
+                loss = repeated_weights * loss
+
             loss = jnp.sum(loss) / jnp.sum(mask)
 
             # compute logging quantities
@@ -156,14 +152,19 @@ class EnsQrDqn(parts.Agent):
 
             # quantities of action chosen
             q_select = _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
-            q_var_select = _select_actions(
-                dist_q_tm1.q_values_var, transitions.a_tm1
+            q_var_select = _select_actions(dist_q_tm1.q_values_var, transitions.a_tm1)
+            epistemic_select = _select_actions(
+                dist_q_tm1.epistemic_uncertainty, transitions.a_tm1
             )
-            epistemic_select = _select_actions(dist_q_tm1.epistemic_uncertainty, transitions.a_tm1)
-            aleatoric_select = _select_actions(dist_q_tm1.aleatoric_uncertainty, transitions.a_tm1)
+            aleatoric_select = _select_actions(
+                dist_q_tm1.aleatoric_uncertainty, transitions.a_tm1
+            )
+
+            td_errors = jnp.mean(losses.reshape((-1, ens_size)), axis=1)
 
             return loss, {
                 "loss": loss,
+                "td_errors": td_errors,
                 "mean_q": mean_q,
                 "mean_q_var": mean_q_var,
                 "mean_epistemic": mean_epistemic,
@@ -267,7 +268,7 @@ class EnsQrDqn(parts.Agent):
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
         logging.log_first_n(logging.INFO, "Begin learning", 1)
-        if self._prioritise:
+        if self._prioritise is not None:
             transitions, indices, weights = self._replay.sample(self._batch_size)
             self._rng_key, self._opt_state, self._online_params, aux = self._update(
                 self._rng_key,
@@ -285,11 +286,16 @@ class EnsQrDqn(parts.Agent):
                 self._online_params,
                 self._target_params,
                 transitions,
-                None
+                None,
             )
-        if self._prioritise:
-            chex.assert_equal_shape((weights, aux["mean_epistemic"]))
-            priorities = jnp.abs(aux["mean_epistemic"])
+        if self._prioritise is not None:
+            if self._prioritise == "uncertainty":
+                chex.assert_equal_shape((weights, aux["mean_epistemic"]))
+                priorities = jnp.abs(aux["mean_epistemic"])
+                priorities = jax.device_get(priorities)
+            elif self._prioritise == "td":
+                chex.assert_equal_shape((weights, aux["td_errors"]))
+                priorities = jnp.abs(aux["td_errors"])
             priorities = jax.device_get(priorities)
             max_priority = priorities.max()
             self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
