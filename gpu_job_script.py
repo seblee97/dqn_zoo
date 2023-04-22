@@ -61,13 +61,13 @@ def _generate_script(
 
         run_command += (
             f"--map_ascii_path={map_ascii_path} --map_yaml_path={map_yaml_path} "
-            f"--map_yaml_paths={map_yaml_paths}"
+            f"--map_yaml_paths={map_yaml_paths} "
         )
 
     if priority is not None:
-        run_command += f"--prioritise={priority}"
+        run_command += f"--prioritise={priority} "
 
-    run_command += f"--environment_name={environment_name}"
+    run_command += f"--environment_name={environment_name} "
 
     script_path = os.path.join(exp_path, "script")
 
