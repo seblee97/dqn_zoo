@@ -15,6 +15,7 @@ parser.add_argument("--game", default="atari")
 parser.add_argument("--dqn_algorithm", default="bootstrapped_dqn")
 parser.add_argument("--seed", default=1)
 parser.add_argument("--priority", default=None)
+parser.add_argument("--environment_name", default="pong")
 
 
 def _generate_script(
@@ -26,6 +27,7 @@ def _generate_script(
     game: str,
     seed: int,
     priority: str,
+    environment_name: str,
 ):
 
     raw_datetime = datetime.datetime.fromtimestamp(time.time())
@@ -65,6 +67,8 @@ def _generate_script(
     if priority is not None:
         run_command += f"--prioritise={priority}"
 
+    run_command += f"--environment_name={environment_name}"
+
     script_path = os.path.join(exp_path, "script")
 
     with open(script_path, "+w") as script_file:
@@ -91,6 +95,7 @@ if __name__ == "__main__":
         timeout=args.timeout,
         algo=args.dqn_algorithm,
         game=args.game,
+        environment_name=args.environment_name,
         seed=args.seed,
         priority=args.priority,
     )
