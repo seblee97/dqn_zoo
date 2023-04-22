@@ -16,7 +16,7 @@ parser.add_argument("--dqn_algorithm", default="bootstrapped_dqn")
 parser.add_argument("--seed", default=1)
 parser.add_argument("--priority", default=None)
 parser.add_argument("--environment_name", default="pong")
-parser.add_argument("--results_path", default=None)
+parser.add_argument("--exp_name", default=None)
 
 
 def _generate_script(
@@ -29,12 +29,16 @@ def _generate_script(
     seed: int,
     priority: str,
     environment_name: str,
-    results_path: str,
+    exp_name: str,
 ):
 
     raw_datetime = datetime.datetime.fromtimestamp(time.time())
     exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
-    exp_path = os.path.join("results", exp_timestamp)
+
+    if exp_name is None:
+        exp_path = os.path.join("results", exp_timestamp)
+    else:
+        exp_path = os.path.join("results", f"{exp_timestamp}_{exp_name}")
     os.makedirs(exp_path, exist_ok=True)
 
     output_path = os.path.join(exp_path, "output.txt")
@@ -71,9 +75,6 @@ def _generate_script(
 
     run_command += f"--environment_name={environment_name} "
 
-    if results_path is not None:
-        run_command += f"--results_path={results_path} "
-
     script_path = os.path.join(exp_path, "script")
 
     with open(script_path, "+w") as script_file:
@@ -103,6 +104,6 @@ if __name__ == "__main__":
         environment_name=args.environment_name,
         seed=args.seed,
         priority=args.priority,
-        results_path=args.results_path,
+        exp_name=args.exp_name,
     )
     subprocess.call(f"sbatch {script_path}", shell=True)
