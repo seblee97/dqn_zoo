@@ -250,7 +250,7 @@ def main(argv):
         mask_t=None,
     )
 
-    if FLAGS.prioritise:
+    if FLAGS.prioritise is not None:
         importance_sampling_exponent_schedule = parts.LinearSchedule(
             begin_t=int(FLAGS.min_replay_capacity_fraction * FLAGS.replay_capacity),
             end_t=(
