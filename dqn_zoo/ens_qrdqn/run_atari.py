@@ -341,7 +341,7 @@ def main(argv):
                 eval_episode_length,
                 "%.2f",
             ),
-            ("td_errors", train_stats.get("mean_q", np.nan), "%.3f"),
+            ("td_errors", train_stats.get("td_errors", np.nan), "%.3f"),
             ("mean_q", train_stats.get("mean_q", np.nan), "%.3f"),
             ("mean_q_var", train_stats.get("mean_q_var", np.nan), "%.3f"),
             ("mean_epistemic", train_stats.get("mean_epistemic", np.nan), "%.3f"),
