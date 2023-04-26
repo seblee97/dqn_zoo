@@ -40,7 +40,7 @@ import optax
 from absl import app, flags, logging
 from jax.config import config
 
-from dqn_zoo import atari_data, gym_key_door,constants, networks, parts, processors
+from dqn_zoo import atari_data, constants, gym_key_door, networks, parts, processors
 from dqn_zoo import replay as replay_lib
 from dqn_zoo.ens_qrdqn import agent
 
@@ -100,7 +100,7 @@ flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
 flags.DEFINE_float("mask_probability", 0.5, "")
 
-flags.DEFINE_bool("prioritise", False, "")
+flags.DEFINE_bool("prioritise", None, "")
 flags.DEFINE_float("priority_exponent", 0.6, "")
 flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
 flags.DEFINE_float("importance_sampling_exponent_end_value", 1.0, "")
@@ -111,7 +111,9 @@ flags.DEFINE_bool("normalize_weights", True, "")
 def main(argv):
     """Trains QR-DQN Ensemble agent on Key-Door."""
     del argv
-    logging.info("QR-DQN Ensemble on Key-Door on %s.", jax.lib.xla_bridge.get_backend().platform)
+    logging.info(
+        "QR-DQN Ensemble on Key-Door on %s.", jax.lib.xla_bridge.get_backend().platform
+    )
     random_state = np.random.RandomState(FLAGS.seed)
     rng_key = jax.random.PRNGKey(
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
@@ -402,6 +404,7 @@ def main(argv):
                 eval_episode_length,
                 "%.2f",
             ),
+            ("td_errors", train_stats.get("td_errors", np.nan), "%.3f"),
             ("mean_q", train_stats.get("mean_q", np.nan), "%.3f"),
             ("mean_q_var", train_stats.get("mean_q_var", np.nan), "%.3f"),
             ("mean_epistemic", train_stats.get("mean_epistemic", np.nan), "%.3f"),
