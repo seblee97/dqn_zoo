@@ -43,8 +43,11 @@ class GymKeyDoor(dm_env.Environment):
                 self._key_door_env,
                 transitions=curriculum_args["map_yaml_paths"],
             )
-            self._transition_episodes = iter(curriculum_args["transition_episodes"])
-            self._next_transition_episode = next(self._transition_episodes)
+            if curriculum_args["transition_episodes"] is None:
+                self._next_transition_episode = np.inf
+            else:
+                self._transition_episodes = iter(curriculum_args["transition_episodes"])
+                self._next_transition_episode = next(self._transition_episodes)
         else:
             self._curriculum = False
 
@@ -112,6 +115,8 @@ class GymKeyDoor(dm_env.Environment):
         try:
             self._next_transition_episode = next(self._transition_episodes)
         except StopIteration:
+            self._next_transition_episode = np.inf
+        except AttributeError:
             self._next_transition_episode = np.inf
 
     def step(self, action: np.int32) -> dm_env.TimeStep:
@@ -341,6 +346,9 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
 
     def plot_heatmap_over_env(self, heatmap, save_name):
         return self._environment.plot_heatmap_over_env(heatmap, save_name)
+    
+    def transition_environment(self):
+        self._environment._transition_environment()
 
     @property
     def state_space(self) -> List[Tuple[int, int]]:
