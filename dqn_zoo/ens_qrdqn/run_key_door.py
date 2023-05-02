@@ -89,16 +89,16 @@ flags.DEFINE_list(
     "Set of yaml paths that define different contexts. Used only if apply_curriculum is True",
 )
 flags.DEFINE_multi_integer(
-    "transition_episodes",
-    (200000, 400000),
-    "Episode number at which environment context switches. Should have same dimension as map_yaml_paths",
+    "transition_iterations",
+    (2, 4),
+    "Iteration number at which environment context switches. Should have same dimension as map_yaml_paths",
 )
 flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 
 flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
-flags.DEFINE_float("mask_probability", 0.5, "")
+flags.DEFINE_float("mask_probability", 1.0, "")
 
 flags.DEFINE_bool("prioritise", None, "")
 flags.DEFINE_float("priority_exponent", 0.6, "")
@@ -135,6 +135,10 @@ def main(argv):
     visualisation_path = os.path.join(exp_path, "visualisations")
     os.makedirs(visualisation_path, exist_ok=True)
 
+    if FLAGS.apply_curriculum:
+        transition_iterations = iter(FLAGS.transition_iterations)
+        next_transition_iteration = next(transition_iterations)
+
     def environment_builder(train_index: int = 0, test_index: int = 0):
         """Creates Atari environment."""
         env = gym_key_door.GymKeyDoor(
@@ -155,7 +159,7 @@ def main(argv):
             curriculum_args={
                 "apply": FLAGS.apply_curriculum,
                 "map_yaml_paths": FLAGS.map_yaml_paths,
-                "transition_episodes": FLAGS.transition_episodes,
+                "transition_episodes": None,
             },
             # FLAGS.environment_name, seed=random_state.randint(1, 2**32)
         )
@@ -349,6 +353,14 @@ def main(argv):
         if state.iteration == 0:
             env = environment_builder(train_index=0, test_index=0)
         # env = environment_builder()
+
+        if FLAGS.apply_curriculum and state.iteration == next_transition_iteration:
+            print(f"Iteration {state.iteration}: Transitioning Environment.")
+            env.transition_environment()
+            try:
+                next_transition_iteration = next(transition_iterations)
+            except StopIteration:
+                next_transition_iteration = np.inf
 
         logging.info("Training iteration %d.", state.iteration)
         train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
