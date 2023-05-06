@@ -50,6 +50,7 @@ class EnsQrDqn(parts.Agent):
         optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.TransitionReplay,
+        learning_rate_computer,
         prioritise: str,
         mask_probability: float,
         ens_size: int,
@@ -95,7 +96,11 @@ class EnsQrDqn(parts.Agent):
             """Calculates loss given network parameters and transitions."""
             # Compute Q value distributions.
             _, online_key, target_key = jax.random.split(rng_key, 3)
-            dist_q_tm1 = network.apply(online_params, online_key, transitions.s_tm1)
+            dist_q_tm1 = network.apply(
+                online_params,
+                online_key,
+                transitions.s_tm1,
+            )
             dist_q_target_t = network.apply(target_params, target_key, transitions.s_t)
 
             # Batch x Ensemble : Quantiles: Actions
@@ -137,7 +142,7 @@ class EnsQrDqn(parts.Agent):
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = mask * losses
-            
+
             if weights is not None:
                 loss = repeated_weights * loss
 
@@ -176,13 +181,24 @@ class EnsQrDqn(parts.Agent):
             }
 
         def update(
-            rng_key, opt_state, online_params, target_params, transitions, weights
+            rng_key,
+            opt_state,
+            online_params,
+            target_params,
+            transitions,
+            weights,
         ):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
             d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
-                online_params, target_params, transitions, weights, update_key
+                online_params,
+                target_params,
+                transitions,
+                weights,
+                update_key,
             )
+            ada_learning_rate = learning_rate_computer(aux)
+            opt_state[1].hyperparams["learning_rate"] = ada_learning_rate
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
             return rng_key, new_opt_state, new_online_params, aux
@@ -193,14 +209,27 @@ class EnsQrDqn(parts.Agent):
             """Samples action from eps-greedy policy wrt Q-values at given state."""
             rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
 
-            q_t = network.apply(network_params, apply_key, s_t[None, ...]).q_values[0]
-            a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
-                seed=policy_key
-            )
+            network_forward = network.apply(network_params, apply_key, s_t[None, ...])
+
+            q_t = network_forward.q_values[0]  # average of multi-head output
+
+            unexpected_uncertainty = jnp.mean(network_forward.epistemic_uncertainty)
+            exploration_beta = 1 / unexpected_uncertainty
+            a_t = distrax.Softmax(q_t, exploration_beta).sample(seed=policy_key)
+
+            if a_t == -1:
+                import pdb
+
+                pdb.set_trace()
+            # a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
+            #     seed=policy_key
+            # )
+            # print("action", a_t)
             v_t = jnp.max(q_t, axis=-1)
             return rng_key, a_t, v_t
 
-        self._select_action = jax.jit(select_action)
+        self._select_action = select_action
+        # self._select_action = jax.jit(select_action)
 
     def _get_random_mask(self, rng_key):
         return jax.random.choice(
@@ -288,6 +317,7 @@ class EnsQrDqn(parts.Agent):
                 transitions,
                 None,
             )
+
         if self._prioritise is not None:
             if self._prioritise == "uncertainty":
                 chex.assert_equal_shape((weights, aux["mean_epistemic"]))
