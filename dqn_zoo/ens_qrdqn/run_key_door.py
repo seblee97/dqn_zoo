@@ -280,9 +280,18 @@ def main(argv):
             FLAGS.replay_capacity, replay_structure, random_state, encoder, decoder
         )
 
-    optimizer = optax.adam(
-        learning_rate=FLAGS.learning_rate, eps=FLAGS.optimizer_epsilon
+    # pass extra hyper-params to optax for shaping control, see:
+    # https://github.com/deepmind/optax/discussions/262
+    optimizer = optax.inject_hyperparams(optax.rmsprop)(
+        learning_rate=FLAGS.learning_rate,
+        decay=0.95,
+        eps=FLAGS.optimizer_epsilon,
+        centered=True,
     )
+
+    # optimizer = optax.adam(
+    #     learning_rate=FLAGS.learning_rate, eps=FLAGS.optimizer_epsilon
+    # )
     if FLAGS.max_global_grad_norm > 0:
         optimizer = optax.chain(
             optax.clip_by_global_norm(FLAGS.max_global_grad_norm), optimizer
@@ -307,6 +316,7 @@ def main(argv):
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
+        learning_rate_computer=parts.DoyaDayuLearningRate(),
         prioritise=FLAGS.prioritise,
         ens_size=FLAGS.ens_size,
         mask_probability=FLAGS.mask_probability,
