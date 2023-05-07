@@ -69,7 +69,7 @@ flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_float("max_global_grad_norm", 10.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
-flags.DEFINE_integer("num_iterations", 3000, "")
+flags.DEFINE_integer("num_iterations", 1500, "")
 flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
 flags.DEFINE_integer("num_eval_frames", int(1e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 4, "")
@@ -90,7 +90,7 @@ flags.DEFINE_list(
 )
 flags.DEFINE_multi_integer(
     "transition_iterations",
-    (2, 4),
+    (500, 1000),
     "Iteration number at which environment context switches. Should have same dimension as map_yaml_paths",
 )
 flags.DEFINE_integer("env_scaling", 8, "")
@@ -98,7 +98,7 @@ flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 
 flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
-flags.DEFINE_float("mask_probability", 1.0, "")
+flags.DEFINE_float("mask_probability", 0.5, "")
 
 flags.DEFINE_bool("prioritise", None, "")
 flags.DEFINE_float("priority_exponent", 0.6, "")
@@ -298,15 +298,6 @@ def main(argv):
         )
 
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
-
-    # create timestamp for logging and checkpoint path
-    if FLAGS.results_path is None:
-        raw_datetime = datetime.datetime.fromtimestamp(time.time())
-        exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
-        exp_path = os.path.join("results", exp_timestamp)
-        os.makedirs(exp_path, exist_ok=True)
-    else:
-        exp_path = FLAGS.results_path
 
     train_agent = agent.EnsQrDqn(
         preprocessor=preprocessor_builder(),
