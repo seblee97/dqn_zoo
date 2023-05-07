@@ -743,9 +743,7 @@ class DoyaDayuLearningRate:
         aleatoric_uncertainty = info["mean_aleatoric"]
 
         lr = jnp.mean(
-            aleatoric_uncertainty / (aleatoric_uncertainty + epistemic_uncertainty)
+            epistemic_uncertainty / (aleatoric_uncertainty + epistemic_uncertainty)
         )
-
-        print("lr", lr)
 
         return lr
