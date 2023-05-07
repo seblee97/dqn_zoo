@@ -69,7 +69,7 @@ flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_float("max_global_grad_norm", 10.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
-flags.DEFINE_integer("num_iterations", 3000, "")
+flags.DEFINE_integer("num_iterations", 1500, "")
 flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
 flags.DEFINE_integer("num_eval_frames", int(1e4), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 4, "")
@@ -90,7 +90,7 @@ flags.DEFINE_list(
 )
 flags.DEFINE_multi_integer(
     "transition_iterations",
-    (2, 4),
+    (500, 1000),
     "Iteration number at which environment context switches. Should have same dimension as map_yaml_paths",
 )
 flags.DEFINE_integer("env_scaling", 8, "")
