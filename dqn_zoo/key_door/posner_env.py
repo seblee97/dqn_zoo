@@ -136,7 +136,7 @@ class PosnerEnv(base_environment.BaseEnvironment):
                 )
 
                 assert (
-                    self._cue_size * self._num_cues < self._map.shape[1]
+                    self._cue_size * self._num_cues <= self._map.shape[1]
                 ), "cue line (size of cue * number of cues) must be less than width of map"
         else:
             self._cue_line_depth = self._cue_specification[constants.CUE_LINE_DEPTH]
