@@ -98,7 +98,7 @@ flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 
 flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
-flags.DEFINE_float("mask_probability", 1.0, "")
+flags.DEFINE_float("mask_probability", 0.5, "")
 
 flags.DEFINE_bool("prioritise", None, "")
 flags.DEFINE_float("priority_exponent", 0.6, "")
