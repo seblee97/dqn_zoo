@@ -282,11 +282,9 @@ def main(argv):
 
     # pass extra hyper-params to optax for shaping control, see:
     # https://github.com/deepmind/optax/discussions/262
-    optimizer = optax.inject_hyperparams(optax.rmsprop)(
+    optimizer = optax.inject_hyperparams(optax.adam)(
         learning_rate=FLAGS.learning_rate,
-        decay=0.95,
         eps=FLAGS.optimizer_epsilon,
-        centered=True,
     )
 
     # optimizer = optax.adam(
