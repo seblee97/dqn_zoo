@@ -737,10 +737,15 @@ class ConstantLearningRate:
 
 
 class DoyaDayuLearningRate:
-    def __call__(self, expectation_info: Dict, variance_info: Dict):
-        online_expectation_var = expectation_info["online_output_variance"]
-        online_variance_mean = variance_info["online_output_mean"]
+    def __call__(self, info):
 
-        return jnp.mean(
-            online_expectation_var / (online_expectation_var + online_variance_mean)
+        epistemic_uncertainty = info["mean_epistemic"]
+        aleatoric_uncertainty = info["mean_aleatoric"]
+
+        lr = jnp.mean(
+            aleatoric_uncertainty / (aleatoric_uncertainty + epistemic_uncertainty)
         )
+
+        print("lr", lr)
+
+        return lr
