@@ -76,8 +76,9 @@ class EnsQrDqn(parts.Agent):
 
         # Initialize network parameters and optimizer.
         self._rng_key, network_rng_key = jax.random.split(rng_key)
+
         self._online_params = network.init(
-            network_rng_key, sample_network_input[None, ...]
+            network_rng_key, (sample_network_input[None, ...], False)
         )
         self._target_params = self._online_params
         self._opt_state = optimizer.init(self._online_params)
@@ -209,7 +210,9 @@ class EnsQrDqn(parts.Agent):
             """Samples action from eps-greedy policy wrt Q-values at given state."""
             rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
 
-            network_forward = network.apply(network_params, apply_key, s_t[None, ...])
+            network_forward = network.apply(
+                network_params, apply_key, (s_t[None, ...], False)
+            )
 
             q_t = network_forward.q_values[0]  # average of multi-head output
 
