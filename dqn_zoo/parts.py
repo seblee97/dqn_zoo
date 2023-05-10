@@ -396,15 +396,17 @@ class EpsilonGreedyActor(Agent):
         def select_action(rng_key, network_params, s_t):
             """Samples action from eps-greedy policy wrt Q-values at given state."""
             rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
-            q_t = network.apply(network_params, apply_key, s_t[None, ...]).q_values[0]
+            q_t = network.apply(
+                network_params, apply_key, (s_t[None, ...], False)
+            ).q_values[0]
             a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
                 seed=policy_key
             )
 
             return rng_key, a_t
 
-        # self._select_action = jax.jit(select_action)
-        self._select_action = select_action
+        self._select_action = jax.jit(select_action)
+        # self._select_action = select_action
 
     def step(self, timestep: dm_env.TimeStep) -> Action:
         """Selects action given a timestep."""
@@ -470,7 +472,7 @@ class EpsilonGreedyVotingActor(Agent):
             rng_key, apply_key, policy_key = jax.random.split(rng_key, 3)
 
             q_t = network.apply(
-                network_params, apply_key, s_t[None, ...]
+                network_params, apply_key, (s_t[None, ...], False)
             ).multi_head_output
 
             num_actions = q_t.shape[-1]
