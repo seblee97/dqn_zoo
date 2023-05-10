@@ -338,24 +338,44 @@ def ens_qr_atari_network(
 
     def net_fn(inputs):
         """Function representing QR-DQN Q-network."""
+        # network = hk.Sequential(
+        #     [
+        #         dqn_torso(),
+        #         dqn_value_head(ens_size * num_quantiles * num_actions),
+        #     ]
+        # )
+        # network_output = network(inputs)
+
+        inputs, stop_grad = inputs
+
         network = hk.Sequential(
             [
                 dqn_torso(),
+            ]
+        )
+
+        head_network = hk.Sequential(
+            [
                 dqn_value_head(ens_size * num_quantiles * num_actions),
             ]
         )
-        network_output = network(inputs)
+
+        feature_network_output = network(inputs)
+
+        if stop_grad:
+            feature_network_output = jax.lax.stop_gradient(feature_network_output)
+
+        head_network_output = head_network(feature_network_output)
+
         full_q = jnp.reshape(
-            network_output, (-1, ens_size, num_quantiles, num_actions)
+            head_network_output, (-1, ens_size, num_quantiles, num_actions)
         )
 
         # Batch x Quantiles x Actions
         q_dist_means = jnp.mean(full_q, axis=1)  # mean over ensemble dimension
         # Batch x Actions
-        q_values = jnp.mean(
-            q_dist_means, axis=1
-        )  # mean over quantiles
-        aleatoric_uncertainty = jnp.var(q_dist_means, axis=1) # var over quantiles
+        q_values = jnp.mean(q_dist_means, axis=1)  # mean over quantiles
+        aleatoric_uncertainty = jnp.var(q_dist_means, axis=1)  # var over quantiles
 
         # Batch x Quantiles x Actions
         q_dist_vars = jnp.var(full_q, axis=1)  # variance over ensemble dimension
@@ -363,8 +383,8 @@ def ens_qr_atari_network(
         epistemic_uncertainty = jnp.mean(q_dist_vars, axis=1)
 
         # Batch x Ensemble x Actions
-        q_dists = jnp.mean(full_q, axis=2) # mean over quantile dimension
-        q_values_var = jnp.var(q_dists, axis=1) # variance over ensemble dimension
+        q_dists = jnp.mean(full_q, axis=2)  # mean over quantile dimension
+        q_values_var = jnp.var(q_dists, axis=1)  # variance over ensemble dimension
 
         q_values = jax.lax.stop_gradient(q_values)
         q_values_var = jax.lax.stop_gradient(q_values_var)
@@ -376,7 +396,7 @@ def ens_qr_atari_network(
             q_values=q_values,
             q_values_var=q_values_var,
             aleatoric_uncertainty=aleatoric_uncertainty,
-            epistemic_uncertainty=epistemic_uncertainty
+            epistemic_uncertainty=epistemic_uncertainty,
         )
 
     return net_fn
