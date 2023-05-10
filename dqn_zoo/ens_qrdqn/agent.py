@@ -304,26 +304,31 @@ class EnsQrDqn(parts.Agent):
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
         logging.log_first_n(logging.INFO, "Begin learning", 1)
+        random_head = np.random.choice(range(self._ens_size))
         if self._prioritise is not None:
-            transitions, indices, weights = self._replay.sample(self._batch_size)
-            self._rng_key, self._opt_state, self._online_params, aux = self._update(
-                self._rng_key,
-                self._opt_state,
-                self._online_params,
-                self._target_params,
-                transitions,
-                weights,
-            )
+            for i in range(self._ens_size):
+                transitions, indices, weights = self._replay.sample(self._batch_size)
+                self._rng_key, self._opt_state, self._online_params, aux = self._update(
+                    self._rng_key,
+                    self._opt_state,
+                    self._online_params,
+                    self._target_params,
+                    transitions,
+                    weights,
+                    stop_grad=i != random_head,
+                )
         else:
-            transitions = self._replay.sample(self._batch_size)
-            self._rng_key, self._opt_state, self._online_params, aux = self._update(
-                self._rng_key,
-                self._opt_state,
-                self._online_params,
-                self._target_params,
-                transitions,
-                None,
-            )
+            for i in range(self._ens_size):
+                transitions = self._replay.sample(self._batch_size)
+                self._rng_key, self._opt_state, self._online_params, aux = self._update(
+                    self._rng_key,
+                    self._opt_state,
+                    self._online_params,
+                    self._target_params,
+                    transitions,
+                    None,
+                    stop_grad=i != random_head,
+                )
 
         if self._prioritise is not None:
             if self._prioritise == "uncertainty":
