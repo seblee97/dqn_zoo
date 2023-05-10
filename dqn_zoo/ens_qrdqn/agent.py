@@ -93,16 +93,18 @@ class EnsQrDqn(parts.Agent):
         # class methods, to emphasize that these are meant to be pure functions
         # and should not access the agent object's state via `self`.
 
-        def loss_fn(online_params, target_params, transitions, weights, rng_key):
+        def loss_fn(
+            online_params, target_params, transitions, weights, rng_key, stop_grad
+        ):
             """Calculates loss given network parameters and transitions."""
             # Compute Q value distributions.
             _, online_key, target_key = jax.random.split(rng_key, 3)
             dist_q_tm1 = network.apply(
-                online_params,
-                online_key,
-                transitions.s_tm1,
+                online_params, online_key, (transitions.s_tm1, stop_grad)
             )
-            dist_q_target_t = network.apply(target_params, target_key, transitions.s_t)
+            dist_q_target_t = network.apply(
+                target_params, target_key, (transitions.s_t, False)
+            )
 
             # Batch x Ensemble : Quantiles: Actions
             flattened_dist_q_tm1 = jnp.reshape(
@@ -188,6 +190,7 @@ class EnsQrDqn(parts.Agent):
             target_params,
             transitions,
             weights,
+            stop_grad,
         ):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
@@ -197,6 +200,7 @@ class EnsQrDqn(parts.Agent):
                 transitions,
                 weights,
                 update_key,
+                stop_grad,
             )
             ada_learning_rate = learning_rate_computer(aux)
             opt_state[1].hyperparams["learning_rate"] = ada_learning_rate
