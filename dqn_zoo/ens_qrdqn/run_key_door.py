@@ -56,7 +56,7 @@ flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
 flags.DEFINE_integer("batch_size", 32, "")
 flags.DEFINE_integer("max_frames_per_episode", 800, "")  # 30 mins.
 flags.DEFINE_integer("num_action_repeats", 1, "")
-flags.DEFINE_integer("num_stacked_frames", 4, "")
+flags.DEFINE_integer("num_stacked_frames", 1, "")
 flags.DEFINE_float("exploration_epsilon_begin_value", 1.0, "")
 flags.DEFINE_float("exploration_epsilon_end_value", 0.1, "")
 flags.DEFINE_float("exploration_epsilon_decay_frame_fraction", 0.02, "")
@@ -97,7 +97,7 @@ flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 
 flags.DEFINE_integer("num_quantiles", 201, "")
-flags.DEFINE_integer("ens_size", 8, "")
+flags.DEFINE_integer("ens_size", 4, "")
 flags.DEFINE_float("mask_probability", 0.5, "")
 
 flags.DEFINE_bool("prioritise", None, "")
@@ -148,6 +148,7 @@ def main(argv):
                 constants.REPRESENTATION: constants.PIXEL,
                 constants.SCALING: FLAGS.env_scaling,
                 constants.EPISODE_TIMEOUT: FLAGS.max_frames_per_episode,
+                constants.BINARIZE: True,
                 constants.GRAYSCALE: False,
                 constants.BATCH_DIMENSION: False,
                 constants.TORCH_AXES: False,
@@ -190,7 +191,7 @@ def main(argv):
             num_pooled_frames=2,
             zero_discount_on_life_loss=True,
             num_stacked_frames=FLAGS.num_stacked_frames,
-            grayscaling=FLAGS.grayscale,
+            grayscaling=False,
         )
 
     # Create sample network input from sample preprocessor output.

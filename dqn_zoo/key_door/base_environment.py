@@ -2,6 +2,7 @@ import abc
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
+
 from dqn_zoo.key_door import constants
 
 
@@ -43,6 +44,7 @@ class BaseEnvironment(abc.ABC):
         scaling: Optional[int] = 1,
         field_x: Optional[int] = 1,
         field_y: Optional[int] = 1,
+        binarize: bool = False,
         grayscale: bool = True,
         batch_dimension: bool = True,
         torch_axes: bool = True,
@@ -69,6 +71,7 @@ class BaseEnvironment(abc.ABC):
         self._scaling = scaling
         self._field_x = field_x
         self._field_y = field_y
+        self._binarize = binarize
         self._grayscale = grayscale
         self._batch_dimension = batch_dimension
         self._torch_axes = torch_axes
