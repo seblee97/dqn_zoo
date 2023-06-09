@@ -33,7 +33,7 @@ from dqn_zoo import replay as replay_lib
 
 # Batch variant of quantile_q_learning with fixed tau input across batch.
 _batch_quantile_q_learning = jax.vmap(
-    rlax.quantile_q_learning, in_axes=(0, None, 0, 0, 0, 0, 0, None)
+    rlax.quantile_q_learning, in_axes=(0, None, 0, 0, 0, 0, 0, None, None, None)
 )
 _select_actions = jax.vmap(lambda q, a: q[a])
 
@@ -128,6 +128,19 @@ class EnsQrDqn(parts.Agent):
             else:
                 repeated_rewards = jnp.repeat(transitions.r_t, ens_size)
 
+            point_losses = _batch_quantile_q_learning(
+                flattened_dist_q_tm1,
+                quantiles,
+                repeated_actions,
+                repeated_rewards,
+                repeated_discounts,
+                flattened_dist_q_target_t,  # No double Q-learning here.
+                flattened_dist_q_target_t,
+                huber_param,
+                True,
+                True,
+            )
+
             losses = _batch_quantile_q_learning(
                 flattened_dist_q_tm1,
                 quantiles,
@@ -137,6 +150,8 @@ class EnsQrDqn(parts.Agent):
                 flattened_dist_q_target_t,  # No double Q-learning here.
                 flattened_dist_q_target_t,
                 huber_param,
+                True,
+                False,
             )
 
             chex.assert_shape((losses), (self._batch_size * ens_size,))
@@ -169,10 +184,12 @@ class EnsQrDqn(parts.Agent):
             )
 
             td_errors = jnp.mean(losses.reshape((-1, ens_size)), axis=1)
+            point_td_errors = jnp.mean(point_losses.reshape((-1, ens_size)), axis=1)
 
             return loss, {
                 "loss": loss,
                 "td_errors": td_errors,
+                "point_td_errors": point_td_errors,
                 "mean_q": mean_q,
                 "mean_q_var": mean_q_var,
                 "mean_epistemic": mean_epistemic,
@@ -338,6 +355,9 @@ class EnsQrDqn(parts.Agent):
             elif self._prioritise == "td":
                 chex.assert_equal_shape((weights, aux["td_errors"]))
                 priorities = jnp.abs(aux["td_errors"])
+            elif self._prioritise == "point_td":
+                chex.assert_equal_shape((weights, aux["point_td_errors"]))
+                priorities = jnp.abs(aux["point_td_errors"])
             priorities = jax.device_get(priorities)
             max_priority = priorities.max()
             self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
