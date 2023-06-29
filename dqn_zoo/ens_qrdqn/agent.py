@@ -36,6 +36,7 @@ _batch_quantile_q_learning = jax.vmap(
     rlax.quantile_q_learning, in_axes=(0, None, 0, 0, 0, 0, 0, None, None, None)
 )
 _select_actions = jax.vmap(lambda q, a: q[a])
+_batch_q_learning = jax.vmap(rlax.q_learning)
 
 
 class EnsQrDqn(parts.Agent):
@@ -120,6 +121,40 @@ class EnsQrDqn(parts.Agent):
             else:
                 repeated_rewards = jnp.repeat(transitions.r_t, ens_size)
 
+            Q = len(quantiles)
+
+            q_tm1_diffs = jnp.diff(flattened_dist_q_tm1, axis=1)
+            q_tm1_pdf = (1 / Q) * np.ones(q_tm1_diffs.shape) / q_tm1_diffs
+            q_target_t_diffs = jnp.diff(flattened_dist_q_target_t, axis=1)
+            q_target_t_pdf = (
+                (1 / Q) * np.ones(q_target_t_diffs.shape) / q_target_t_diffs
+            )
+
+            q_quantiles_tm1 = (
+                flattened_dist_q_tm1[:, :-1, :]
+                + jnp.diff(flattened_dist_q_tm1, axis=1) / 2
+            )
+            q_quantiles_target_t = (
+                flattened_dist_q_target_t[:, :-1, :]
+                + jnp.diff(flattened_dist_q_target_t, axis=1) / 2
+            )
+
+            from_quantiles_mean_q = jnp.sum(
+                jnp.multiply(q_quantiles_tm1, q_tm1_pdf), axis=1
+            ) / jnp.sum(q_tm1_pdf, axis=1)
+
+            from_quantiles_mean_q_target = jnp.sum(
+                jnp.multiply(q_quantiles_target_t, q_target_t_pdf), axis=1
+            ) / jnp.sum(q_target_t_pdf, axis=1)
+
+            mean_losses = _batch_q_learning(
+                from_quantiles_mean_q,
+                repeated_actions,
+                repeated_rewards,
+                repeated_discounts,
+                from_quantiles_mean_q_target,
+            )
+
             point_losses = _batch_quantile_q_learning(
                 flattened_dist_q_tm1,
                 quantiles,
@@ -182,6 +217,7 @@ class EnsQrDqn(parts.Agent):
                 "loss": loss,
                 "td_errors": td_errors,
                 "point_td_errors": point_td_errors,
+                "mean_td_errors": mean_losses,
                 "mean_q": mean_q,
                 "mean_q_var": mean_q_var,
                 "mean_epistemic": mean_epistemic,
