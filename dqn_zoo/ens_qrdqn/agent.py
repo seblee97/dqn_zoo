@@ -187,7 +187,7 @@ class EnsQrDqn(parts.Agent):
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = mask * losses
-            
+
             if weights is not None:
                 loss = repeated_weights * loss
 
@@ -352,6 +352,9 @@ class EnsQrDqn(parts.Agent):
             elif self._prioritise == "point_td":
                 chex.assert_equal_shape((weights, aux["point_td_errors"]))
                 priorities = jnp.abs(aux["point_td_errors"])
+            elif self._prioritise == "mean_td":
+                chex.assert_equal_shape((weights, aux["mean_td_errors"]))
+                priorities = jnp.abs(aux["mean_td_errors"])
             priorities = jax.device_get(priorities)
             max_priority = priorities.max()
             self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
