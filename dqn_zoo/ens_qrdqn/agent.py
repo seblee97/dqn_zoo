@@ -212,12 +212,13 @@ class EnsQrDqn(parts.Agent):
 
             td_errors = jnp.mean(losses.reshape((-1, ens_size)), axis=1)
             point_td_errors = jnp.mean(point_losses.reshape((-1, ens_size)), axis=1)
+            mean_td_errors = jnp.mean(mean_losses.reshape((-1, ens_size)), axis=1)
 
             return loss, {
                 "loss": loss,
                 "td_errors": td_errors,
                 "point_td_errors": point_td_errors,
-                "mean_td_errors": mean_losses,
+                "mean_td_errors": mean_td_errors,
                 "mean_q": mean_q,
                 "mean_q_var": mean_q_var,
                 "mean_epistemic": mean_epistemic,
