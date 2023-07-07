@@ -124,8 +124,12 @@ class EnsQrDqn(parts.Agent):
             Q = len(quantiles)
 
             q_tm1_diffs = jnp.diff(flattened_dist_q_tm1, axis=1)
-            q_tm1_pdf = (1 / Q) * np.ones(q_tm1_diffs.shape) / q_tm1_diffs
             q_target_t_diffs = jnp.diff(flattened_dist_q_target_t, axis=1)
+            # ensure diffs non-zero to avoid inf.
+            q_tm1_diffs = q_tm1_diffs.at[:].add(1e-6)
+            q_target_t_diffs = q_target_t_diffs.at[:].add(1e-6)
+
+            q_tm1_pdf = (1 / Q) * np.ones(q_tm1_diffs.shape) / q_tm1_diffs
             q_target_t_pdf = (
                 (1 / Q) * np.ones(q_target_t_diffs.shape) / q_target_t_diffs
             )
@@ -147,14 +151,14 @@ class EnsQrDqn(parts.Agent):
                 jnp.multiply(q_quantiles_target_t, q_target_t_pdf), axis=1
             ) / jnp.sum(q_target_t_pdf, axis=1)
 
-            mean_td_errors = _batch_q_learning(
+            mean_td = _batch_q_learning(
                 from_quantiles_mean_q,
                 repeated_actions,
                 repeated_rewards,
                 repeated_discounts,
                 from_quantiles_mean_q_target,
             )
-            mean_td_losses = rlax.l2_loss(mean_td_errors)
+            mean_td_losses = rlax.l2_loss(mean_td)
 
             point_losses = _batch_quantile_q_learning(
                 flattened_dist_q_tm1,
