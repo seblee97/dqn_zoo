@@ -121,35 +121,38 @@ class EnsQrDqn(parts.Agent):
             else:
                 repeated_rewards = jnp.repeat(transitions.r_t, ens_size)
 
-            Q = len(quantiles)
+            # Q = len(quantiles)
 
-            q_tm1_diffs = jnp.diff(flattened_dist_q_tm1, axis=1)
-            q_target_t_diffs = jnp.diff(flattened_dist_q_target_t, axis=1)
-            # ensure diffs non-zero to avoid inf.
-            q_tm1_diffs = q_tm1_diffs.at[:].add(1e-6)
-            q_target_t_diffs = q_target_t_diffs.at[:].add(1e-6)
+            # q_tm1_diffs = jnp.diff(flattened_dist_q_tm1, axis=1)
+            # q_target_t_diffs = jnp.diff(flattened_dist_q_target_t, axis=1)
+            # # ensure diffs non-zero to avoid inf.
+            # q_tm1_diffs = q_tm1_diffs.at[:].add(1e-6)
+            # q_target_t_diffs = q_target_t_diffs.at[:].add(1e-6)
 
-            q_tm1_pdf = (1 / Q) * np.ones(q_tm1_diffs.shape) / q_tm1_diffs
-            q_target_t_pdf = (
-                (1 / Q) * np.ones(q_target_t_diffs.shape) / q_target_t_diffs
-            )
+            # q_tm1_pdf = (1 / Q) * np.ones(q_tm1_diffs.shape) / q_tm1_diffs
+            # q_target_t_pdf = (
+            #     (1 / Q) * np.ones(q_target_t_diffs.shape) / q_target_t_diffs
+            # )
 
-            q_quantiles_tm1 = (
-                flattened_dist_q_tm1[:, :-1, :]
-                + jnp.diff(flattened_dist_q_tm1, axis=1) / 2
-            )
-            q_quantiles_target_t = (
-                flattened_dist_q_target_t[:, :-1, :]
-                + jnp.diff(flattened_dist_q_target_t, axis=1) / 2
-            )
+            # q_quantiles_tm1 = (
+            #     flattened_dist_q_tm1[:, :-1, :]
+            #     + jnp.diff(flattened_dist_q_tm1, axis=1) / 2
+            # )
+            # q_quantiles_target_t = (
+            #     flattened_dist_q_target_t[:, :-1, :]
+            #     + jnp.diff(flattened_dist_q_target_t, axis=1) / 2
+            # )
 
-            from_quantiles_mean_q = jnp.sum(
-                jnp.multiply(q_quantiles_tm1, q_tm1_pdf), axis=1
-            ) / jnp.sum(q_tm1_pdf, axis=1)
+            # from_quantiles_mean_q = jnp.sum(
+            #     jnp.multiply(q_quantiles_tm1, q_tm1_pdf), axis=1
+            # ) / jnp.sum(q_tm1_pdf, axis=1)
 
-            from_quantiles_mean_q_target = jnp.sum(
-                jnp.multiply(q_quantiles_target_t, q_target_t_pdf), axis=1
-            ) / jnp.sum(q_target_t_pdf, axis=1)
+            # from_quantiles_mean_q_target = jnp.sum(
+            #     jnp.multiply(q_quantiles_target_t, q_target_t_pdf), axis=1
+            # ) / jnp.sum(q_target_t_pdf, axis=1)
+
+            from_quantiles_mean_q = jnp.mean(flattened_dist_q_tm1, axis=1)
+            from_quantiles_mean_q_target = jnp.mean(flattened_dist_q_target_t, axis=1)
 
             mean_td = _batch_q_learning(
                 from_quantiles_mean_q,
