@@ -50,7 +50,6 @@ class EnsQrDqn(parts.Agent):
         optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.TransitionReplay,
-        learning_rate_computer,
         prioritise: str,
         mask_probability: float,
         ens_size: int,
@@ -202,8 +201,6 @@ class EnsQrDqn(parts.Agent):
                 update_key,
                 stop_grad,
             )
-            ada_learning_rate = learning_rate_computer(aux)
-            opt_state[1].hyperparams["learning_rate"] = ada_learning_rate
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
             return rng_key, new_opt_state, new_online_params, aux
@@ -220,14 +217,14 @@ class EnsQrDqn(parts.Agent):
 
             q_t = network_forward.q_values[0]  # average of multi-head output
 
-            unexpected_uncertainty = jnp.mean(network_forward.epistemic_uncertainty)
-            exploration_beta = 1 / unexpected_uncertainty
-            a_t = distrax.Softmax(q_t, exploration_beta).sample(seed=policy_key)
+            a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
+                seed=policy_key
+            )
 
-            if a_t == -1:
-                import pdb
+            # if a_t == -1:
+            #     import pdb
 
-                pdb.set_trace()
+            #     pdb.set_trace()
             # a_t = distrax.EpsilonGreedy(q_t, exploration_epsilon).sample(
             #     seed=policy_key
             # )
@@ -235,8 +232,8 @@ class EnsQrDqn(parts.Agent):
             v_t = jnp.max(q_t, axis=-1)
             return rng_key, a_t, v_t
 
-        self._select_action = select_action
-        # self._select_action = jax.jit(select_action)
+        # self._select_action = select_action
+        self._select_action = jax.jit(select_action)
 
     def _get_random_mask(self, rng_key):
         return jax.random.choice(
