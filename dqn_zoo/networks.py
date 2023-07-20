@@ -362,8 +362,12 @@ def ens_qr_atari_network(
 
         feature_network_output = network(inputs)
 
-        if stop_grad:
-            feature_network_output = jax.lax.stop_gradient(feature_network_output)
+        feature_network_output = jax.lax.cond(
+            stop_grad,
+            jax.lax.stop_gradient,
+            lambda x: x,
+            feature_network_output,
+        )
 
         head_network_output = head_network(feature_network_output)
 
