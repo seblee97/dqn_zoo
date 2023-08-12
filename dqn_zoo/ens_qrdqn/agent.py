@@ -328,9 +328,21 @@ class EnsQrDqn(parts.Agent):
                 )
 
         if self._prioritise is not None:
-            if self._prioritise == "uncertainty":
+            if self._prioritise == "averaged_uncertainty":
                 chex.assert_equal_shape((weights, aux["mean_epistemic"]))
                 priorities = jnp.abs(aux["mean_epistemic"])
+                priorities = jax.device_get(priorities)
+            if self._prioritise == "uncertainty":
+                chex.assert_equal_shape((weights, aux["epistemic_select"]))
+                priorities = jnp.abs(aux["epistemic_select"])
+                priorities = jax.device_get(priorities)
+            elif self._prioritise == "uncertainty_ratio":
+                chex.assert_equal_shape((weights, aux["epistemic_select"]))
+                chex.assert_equal_shape((weights, aux["aleatoric_select"]))
+                priorities = jnp.abs(
+                    aux["mean_epistemic"]
+                    / (aux["mean_epistemic"] + aux["mean_aleatoric"])
+                )
                 priorities = jax.device_get(priorities)
             elif self._prioritise == "td":
                 chex.assert_equal_shape((weights, aux["td_errors"]))
