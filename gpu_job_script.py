@@ -17,6 +17,8 @@ parser.add_argument("--seed", default=1)
 parser.add_argument("--priority", default=None)
 parser.add_argument("--environment_name", default="pong")
 parser.add_argument("--exp_name", default=None)
+parser.add_argument("--ens_size", default=None)
+parser.add_argument("--learning_rate", default=None)
 
 
 def _generate_script(
@@ -27,6 +29,8 @@ def _generate_script(
     algo: str,
     game: str,
     seed: int,
+    ens_size: int,
+    learning_rate: float,
     priority: str,
     environment_name: str,
     exp_name: str,
@@ -73,6 +77,12 @@ def _generate_script(
     if priority is not None:
         run_command += f"--prioritise={priority} "
 
+    if ens_size is not None:
+        run_command += f"--ens_size={ens_size} "
+
+    if learning_rate is not None:
+        run_command += f"--learning_rate={learning_rate} "
+
     run_command += f"--environment_name={environment_name} "
 
     script_path = os.path.join(exp_path, "script")
@@ -105,5 +115,7 @@ if __name__ == "__main__":
         seed=args.seed,
         priority=args.priority,
         exp_name=args.exp_name,
+        ens_size=args.ens_size,
+        learning_rate=args.learning_rate,
     )
     subprocess.call(f"sbatch {script_path}", shell=True)
