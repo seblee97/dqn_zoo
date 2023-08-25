@@ -78,7 +78,7 @@ flags.DEFINE_integer("num_quantiles", 201, "")
 flags.DEFINE_integer("ens_size", 8, "")
 flags.DEFINE_float("mask_probability", 0.5, "")
 
-flags.DEFINE_string("prioritise", None, "")
+flags.DEFINE_string("prioritise", "uncertainty_ratio_select", "")
 flags.DEFINE_float("priority_exponent", 0.6, "")
 flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
 flags.DEFINE_float("importance_sampling_exponent_end_value", 1.0, "")
