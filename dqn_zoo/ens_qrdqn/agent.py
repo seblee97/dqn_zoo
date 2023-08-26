@@ -93,7 +93,13 @@ class EnsQrDqn(parts.Agent):
         # and should not access the agent object's state via `self`.
 
         def loss_fn(
-            online_params, target_params, transitions, weights, rng_key, stop_grad
+            online_params,
+            target_params,
+            transitions,
+            weights,
+            rng_key,
+            stop_grad,
+            head_index,
         ):
             """Calculates loss given network parameters and transitions."""
             # Compute Q value distributions.
@@ -142,7 +148,11 @@ class EnsQrDqn(parts.Agent):
             if weights is not None:
                 chex.assert_shape((repeated_weights), (self._batch_size * ens_size,))
 
-            mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
+            mask_array = (
+                jnp.zeros(shape=(self._batch_size, ens_size)).at[:, head_index].set(1)
+            )
+
+            mask = jax.lax.stop_gradient(jnp.reshape(mask_array, (-1,)))
             loss = mask * losses
 
             if weights is not None:
@@ -190,6 +200,7 @@ class EnsQrDqn(parts.Agent):
             transitions,
             weights,
             stop_grad,
+            head_index,
         ):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
@@ -313,6 +324,7 @@ class EnsQrDqn(parts.Agent):
                     transitions,
                     weights,
                     stop_grad=i != random_head,
+                    head_index=i,
                 )
         else:
             for i in range(self._ens_size):
