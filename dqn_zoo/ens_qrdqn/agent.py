@@ -211,6 +211,7 @@ class EnsQrDqn(parts.Agent):
                 weights,
                 update_key,
                 stop_grad,
+                head_index,
             )
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
