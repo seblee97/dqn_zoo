@@ -275,8 +275,8 @@ def main(argv):
 
     state = checkpoint.state
     state.iteration = 0
-    state.train_agent = train_agent
-    state.eval_agent = eval_agent
+    state.train_agent = train_agent.get_state()
+    state.eval_agent = eval_agent.get_state()
     state.random_state = random_state
     state.writer = writer
     if checkpoint.can_be_restored():
@@ -359,7 +359,7 @@ def main(argv):
         logging.info(log_output_str)
         writer.write(collections.OrderedDict((n, v) for n, v, _ in log_output))
         state.iteration += 1
-        # checkpoint.save()
+        checkpoint.save()
 
     writer.close()
 
