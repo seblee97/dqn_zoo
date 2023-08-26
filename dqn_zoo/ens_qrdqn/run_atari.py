@@ -278,7 +278,7 @@ def main(argv):
     state.train_agent = train_agent.get_state()
     state.eval_agent = eval_agent.get_state()
     state.random_state = random_state
-    state.writer = writer
+    state.writer = writer.get_state()
     if checkpoint.can_be_restored():
         checkpoint.restore()
 
