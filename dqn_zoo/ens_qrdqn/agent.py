@@ -327,6 +327,31 @@ class EnsQrDqn(parts.Agent):
                     stop_grad=i != random_head,
                     head_index=i,
                 )
+                if self._prioritise == "averaged_uncertainty":
+                    chex.assert_equal_shape((weights, aux["mean_epistemic"]))
+                    priorities = jnp.abs(aux["mean_epistemic"])
+                elif self._prioritise == "uncertainty":
+                    chex.assert_equal_shape((weights, aux["epistemic_select"]))
+                    priorities = jnp.abs(aux["epistemic_select"])
+                elif self._prioritise == "uncertainty_ratio":
+                    chex.assert_equal_shape((weights, aux["epistemic_select"]))
+                    chex.assert_equal_shape((weights, aux["aleatoric_select"]))
+                    priorities = jnp.abs(aux["mean_epistemic"] / aux["mean_aleatoric"])
+                elif self._prioritise == "uncertainty_ratio_select":
+                    chex.assert_equal_shape((weights, aux["epistemic_select"]))
+                    chex.assert_equal_shape((weights, aux["aleatoric_select"]))
+                    priorities = jnp.abs(
+                        aux["epistemic_select"] / aux["aleatoric_select"]
+                    )
+                elif self._prioritise == "td":
+                    chex.assert_equal_shape((weights, aux["td_errors"]))
+                    priorities = jnp.abs(aux["td_errors"])
+                priorities = jax.device_get(priorities)
+                max_priority = priorities.max()
+                self._max_seen_priority = np.max(
+                    [self._max_seen_priority, max_priority]
+                )
+                self._replay.update_priorities(indices, priorities)
         else:
             for i in range(self._ens_size):
                 transitions = self._replay.sample(self._batch_size)
@@ -339,33 +364,6 @@ class EnsQrDqn(parts.Agent):
                     None,
                     stop_grad=i != random_head,
                 )
-
-        if self._prioritise is not None:
-            if self._prioritise == "averaged_uncertainty":
-                chex.assert_equal_shape((weights, aux["mean_epistemic"]))
-                priorities = jnp.abs(aux["mean_epistemic"])
-                priorities = jax.device_get(priorities)
-            if self._prioritise == "uncertainty":
-                chex.assert_equal_shape((weights, aux["epistemic_select"]))
-                priorities = jnp.abs(aux["epistemic_select"])
-                priorities = jax.device_get(priorities)
-            elif self._prioritise == "uncertainty_ratio":
-                chex.assert_equal_shape((weights, aux["epistemic_select"]))
-                chex.assert_equal_shape((weights, aux["aleatoric_select"]))
-                priorities = jnp.abs(aux["mean_epistemic"] / aux["mean_aleatoric"])
-                priorities = jax.device_get(priorities)
-            elif self._prioritise == "uncertainty_ratio_select":
-                chex.assert_equal_shape((weights, aux["epistemic_select"]))
-                chex.assert_equal_shape((weights, aux["aleatoric_select"]))
-                priorities = jnp.abs(aux["epistemic_select"] / aux["aleatoric_select"])
-                priorities = jax.device_get(priorities)
-            elif self._prioritise == "td":
-                chex.assert_equal_shape((weights, aux["td_errors"]))
-                priorities = jnp.abs(aux["td_errors"])
-            priorities = jax.device_get(priorities)
-            max_priority = priorities.max()
-            self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
-            self._replay.update_priorities(indices, priorities)
 
         aux = {k: jnp.mean(v) for k, v in aux.items()}
 
