@@ -60,6 +60,11 @@ class MaskedTransition(typing.NamedTuple):
     mask_t: Optional[np.ndarray]
 
 
+class CFNElement(typing.NamedTuple):
+    s: Optional[np.ndarray]
+    cf_vector: Optional[np.ndarray]
+
+
 class UniformDistribution:
     """Provides uniform sampling of user-defined integer IDs."""
 
