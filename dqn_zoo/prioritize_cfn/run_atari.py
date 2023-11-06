@@ -64,6 +64,7 @@ flags.DEFINE_integer("num_coin_flips", 20, "")
 flags.DEFINE_float("cfn_learning_rate", 0.00001, "")
 flags.DEFINE_integer("cfn_replay_capacity", int(2e7), "")
 flags.DEFINE_integer("cfn_update_period", 4, "")
+flags.DEFINE_float("sum_weighting_alpha", 0.5, "")
 
 flags.DEFINE_float("priority_exponent", 0.6, "")
 flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
@@ -115,7 +116,7 @@ def main(argv):
     )
     network = hk.transform(network_fn)
 
-    cfn_network_fn = networks.cfn_network()
+    cfn_network_fn = networks.cfn_network(FLAGS.num_coin_flips)
     cfn_network = hk.transform(cfn_network_fn)
 
     def preprocessor_builder():
@@ -212,8 +213,13 @@ def main(argv):
 
     cfn_replay_structure = replay_lib.CFNElement(s=None, cf_vector=None)
 
-    cfn_replay = replay_lib.TransitionReplay(
-        FLAGS.cfn_replay_capacity, cfn_replay_structure, random_state
+    cfn_replay = replay_lib.PrioritizedTransitionReplay(
+        FLAGS.cfn_replay_capacity, cfn_replay_structure, 
+        FLAGS.priority_exponent,
+        importance_sampling_exponent_schedule,
+        FLAGS.uniform_sample_probability,
+        FLAGS.normalize_weights,
+        random_state,
     )
 
     cfn_optimizer = optax.rmsprop(
@@ -235,6 +241,7 @@ def main(argv):
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
         cfn_replay=cfn_replay,
+        sum_weighting_alpha=FLAGS.sum_weighting_alpha,
         num_coin_flips=FLAGS.num_coin_flips,
         shaping=shaping.NoPenalty(),
         mask_probability=FLAGS.mask_probability,
