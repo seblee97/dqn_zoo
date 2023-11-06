@@ -35,7 +35,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         cfn_optimizer: optax.GradientTransformation,
         transition_accumulator: Any,
         replay: replay_lib.PrioritizedTransitionReplay,
-        cfn_replay: replay_lib.TransitionReplay,
+        cfn_replay: replay_lib.PrioritizedTransitionReplay,
+        sum_weighting_alpha: float,
         shaping,
         mask_probability: float,
         num_heads: int,
@@ -51,6 +52,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._preprocessor = preprocessor
         self._replay = replay
         self._cfn_replay = cfn_replay
+        self._sum_weighting_alpha = sum_weighting_alpha
         self._transition_accumulator = transition_accumulator
         self._mask_probabilities = jnp.array([mask_probability, 1 - mask_probability])
         self._num_heads = num_heads
@@ -85,6 +87,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._frame_t = -1  # Current frame index.
         self._statistics = {"state_value": np.nan}
         self._max_seen_priority = 1.0
+        self._cfn_max_seen_priority = 1.0
 
         LOG_EPSILON = 0.0001
 
@@ -101,7 +104,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
         def _cfn_forward(params, state):
             _, split_key = jax.random.split(rng_key)
-            _ = cfn.apply(params, split_key, state).multi_head_output
+            _ = cfn_network.apply(params, split_key, state).multi_head_output
             return
 
         self._cfn_forward = jax.jit(_cfn_forward)
@@ -174,12 +177,15 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 "value_vars": online_source_value_vars,
             }
 
-        def cfn_loss_fn(cfn_params, cfn_batch, rng_key):
+        def cfn_loss_fn(cfn_params, cfn_batch, cfn_counts, rng_key):
             """simple MSE."""
-            import pdb
+            pred = cfn_network.apply(cfn_params, rng_key, cfn_batch.s).predictions
+            loss = jnp.mean((pred - cfn_batch.cf_vector) ** 2)
 
-            pdb.set_trace()
-            pass
+            priority = sum_weighting_alpha * (1 / cfn_counts) + (1 - sum_weighting_alpha) * jnp.mean(pred ** 2, axis=1)
+            priority = jnp.mean(pred ** 2, axis=1)
+
+            return loss, {"cfn_loss": loss, "cfn_priorities": priority}
 
         def update(
             rng_key,
@@ -190,6 +196,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             cfn_opt_state,
             cfn_params,
             cfn_batch,
+            cfn_counts
         ):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key, cfn_update_key = jax.random.split(rng_key, 3)
@@ -204,9 +211,14 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
 
+            cfn_predictions = cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
+            pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
+            aux["pseudocounts"] = pseudocounts
+
             cfn_d_loss_d_params, cfn_aux = jax.grad(cfn_loss_fn, has_aux=True)(
                 cfn_params,
                 cfn_batch,
+                cfn_counts,
                 cfn_update_key,
             )
             cfn_updates, cfn_new_opt_state = cfn_optimizer.update(
@@ -218,6 +230,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             #     s_tm1=transitions.s_tm1,
             #     cf_vector=coin_flip_vector,
             # )
+
+            aux = {**aux, **cfn_aux}
 
             return (
                 rng_key,
@@ -276,6 +290,13 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 )
                 self._replay.add(transition, priority=self._max_seen_priority)
 
+                cf_rng, self._rng_key = jax.random.split(self._rng_key)
+                coin_flip_vector = jax.random.bernoulli(cf_rng, shape=[self._num_coin_flips]).astype(int)
+                coin_flip_vector = coin_flip_vector.at[jnp.where(coin_flip_vector == 0)].set(-1)
+
+                cf_transition = replay_lib.CFNElement(s=transition.s_tm1, cf_vector=coin_flip_vector)
+                self._cfn_replay.add(cf_transition, priority=self._cfn_max_seen_priority)
+
         if self._replay.size < self._min_replay_capacity:
             return action, {}
 
@@ -311,13 +332,9 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
         logging.log_first_n(logging.INFO, "Begin learning", 1)
-        transitions, indices, weights = self._replay.sample(self._batch_size)
+        transitions, indices, weights, _ = self._replay.sample(self._batch_size)
 
-        cfn_batch, indices, weights = self._cfn_replay.sample(self._cfn_batch_size)
-
-        cf_rng, self._rng_key = jax.random.split(self._rng_key)
-        coin_flip_vector = jax.random.bernoulli(cf_rng, shape=self._num_coin_flips)
-        coin_flip_vector[jnp.where(coin_flip_vector == 0)] = -1
+        cfn_batch, cfn_indices, cfn_weights, cfn_counts = self._cfn_replay.sample(self._cfn_batch_size)
 
         (
             self._rng_key,
@@ -336,13 +353,23 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             self._cfn_opt_state,
             self._cfn_params,
             cfn_batch,
+            cfn_counts
         )
-        chex.assert_equal_shape((weights, td_errors))
-        priorities = jnp.abs(td_errors)
+        chex.assert_equal_shape((weights, aux["pseudocounts"]))
+        priorities = jnp.abs(1 / aux["pseudocounts"])
         priorities = jax.device_get(priorities)
         max_priority = priorities.max()
         self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
+        
+        chex.assert_equal_shape((cfn_weights, aux["cfn_priorities"]))
+        cfn_priorities = jnp.abs(aux["cfn_priorities"])
+        cfn_priorities = jax.device_get(cfn_priorities)
+        cfn_max_priority = cfn_priorities.max()
+        self._cfn_max_seen_priority = np.max([self._cfn_max_seen_priority, cfn_max_priority])
+
         self._replay.update_priorities(indices, priorities)
+        self._cfn_replay.update_priorities(cfn_indices, cfn_priorities)
+        
         return aux
 
     @property
