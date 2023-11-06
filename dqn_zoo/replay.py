@@ -707,6 +707,7 @@ class PrioritizedTransitionReplay(Generic[ReplayStructure]):
         self._importance_sampling_exponent = importance_sampling_exponent
         self._normalize_weights = normalize_weights
         self._storage = collections.OrderedDict()  # ID -> item.
+        self._counts = np.zeros(capacity, dtype=np.int32)
         self._t = 0  # Used to allocate IDs.
 
     def add(self, item: ReplayStructure, priority: float) -> None:
@@ -714,6 +715,7 @@ class PrioritizedTransitionReplay(Generic[ReplayStructure]):
         if self.size == self._capacity:
             oldest_id, _ = self._storage.popitem(last=False)
             self._distribution.remove_priorities([oldest_id])
+            self._counts[oldest_id] = 0
 
         item_id = self._t
         self._distribution.add_priorities([item_id], [priority])
@@ -724,6 +726,12 @@ class PrioritizedTransitionReplay(Generic[ReplayStructure]):
         """Retrieves items by IDs."""
         for i in ids:
             yield self._decoder(self._storage[i])
+
+    def counts(self, ids: Sequence[int]) -> Iterable[int]:
+        """Retrieves items by IDs."""
+        for i in ids:
+            self._counts[i] += 1
+        return self._counts[ids]
 
     def sample(
         self,
@@ -741,7 +749,8 @@ class PrioritizedTransitionReplay(Generic[ReplayStructure]):
         transposed = zip(*samples)
         stacked = [np.stack(xs, axis=0) for xs in transposed]
         # pytype: disable=not-callable
-        return type(self._structure)(*stacked), ids, weights
+        counts = self.counts(ids)
+        return type(self._structure)(*stacked), ids, weights, counts
         # pytype: enable=not-callable
 
     def update_priorities(
