@@ -30,6 +30,10 @@ Params = hk.Params
 NetworkFn = Callable[..., Any]
 
 
+class CFNNetworkOutputs(typing.NamedTuple):
+    predictions: jnp.ndarray
+
+
 class QNetworkOutputs(typing.NamedTuple):
     q_values: jnp.ndarray
 
@@ -492,5 +496,15 @@ def bootstrapped_dqn_multi_head_network(
             multi_head_output=multi_head_output,
             random_head_q_value=multi_head_output[0][0],
         )
+
+    return net_fn
+
+
+def cfn_network(num_coin_flips: int):
+    def net_fn(inputs):
+        network = hk.Sequential([dqn_torso(), dqn_value_head(num_coin_flips)])
+        network_output = network(inputs)
+
+        return CFNNetworkOutputs(predictions=network_output)
 
     return net_fn
