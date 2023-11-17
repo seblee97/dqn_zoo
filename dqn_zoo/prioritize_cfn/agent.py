@@ -182,7 +182,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             pred = cfn_network.apply(cfn_params, rng_key, cfn_batch.s).predictions
             loss = jnp.mean((pred - cfn_batch.cf_vector) ** 2)
 
-            priority = sum_weighting_alpha * (1 / cfn_counts) + (1 - sum_weighting_alpha) * jnp.mean(pred ** 2, axis=1)
+            priority = sum_weighting_alpha * (1 / cfn_counts) + (1 - sum_weighting_alpha) * jnp.mean(pred ** 2, axis=1) / num_coin_flips
             priority = jnp.mean(pred ** 2, axis=1)
 
             return loss, {"cfn_loss": loss, "cfn_priorities": priority}
