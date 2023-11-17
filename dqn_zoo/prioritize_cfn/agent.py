@@ -212,8 +212,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             new_online_params = optax.apply_updates(online_params, updates)
 
             cfn_predictions = cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
-            pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
-            aux["pseudocounts"] = pseudocounts
+            inverse_pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
+            aux["inverse_pseudocounts"] = inverse_pseudocounts
 
             cfn_d_loss_d_params, cfn_aux = jax.grad(cfn_loss_fn, has_aux=True)(
                 cfn_params,
@@ -355,8 +355,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             cfn_batch,
             cfn_counts
         )
-        chex.assert_equal_shape((weights, aux["pseudocounts"]))
-        priorities = jnp.abs(1 / aux["pseudocounts"])
+        chex.assert_equal_shape((weights, aux["inverse_pseudocounts"]))
+        priorities = jnp.sqrt(aux["inverse_pseudocounts"] / self._num_coin_flips)
         priorities = jax.device_get(priorities)
         max_priority = priorities.max()
         self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
