@@ -356,7 +356,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             cfn_counts
         )
         chex.assert_equal_shape((weights, aux["inverse_pseudocounts"]))
-        priorities = jnp.sqrt(aux["inverse_pseudocounts"] / self._num_coin_flips)
+        priorities = jnp.sqrt(aux["inverse_pseudocounts"])
         priorities = jax.device_get(priorities)
         max_priority = priorities.max()
         self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
