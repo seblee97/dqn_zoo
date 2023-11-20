@@ -36,7 +36,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         transition_accumulator: Any,
         replay: replay_lib.PrioritizedTransitionReplay,
         cfn_replay: replay_lib.PrioritizedTransitionReplay,
-        sum_weighting_alpha: float,
         shaping,
         mask_probability: float,
         num_heads: int,
@@ -52,7 +51,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._preprocessor = preprocessor
         self._replay = replay
         self._cfn_replay = cfn_replay
-        self._sum_weighting_alpha = sum_weighting_alpha
         self._transition_accumulator = transition_accumulator
         self._mask_probabilities = jnp.array([mask_probability, 1 - mask_probability])
         self._num_heads = num_heads
@@ -88,8 +86,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._statistics = {"state_value": np.nan}
         self._max_seen_priority = 1.0
         self._cfn_max_seen_priority = 1.0
-
-        LOG_EPSILON = 0.0001
 
         # Define jitted loss, update, and policy functions here instead of as
         # class methods, to emphasize that these are meant to be pure functions
