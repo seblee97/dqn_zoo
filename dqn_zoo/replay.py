@@ -570,6 +570,9 @@ class PrioritizedDistribution:
             if i not in self._id_to_index:
                 raise IndexError("ID %d does not exist." % i)
             indices.append(self._id_to_index[i])
+        # equation 6 of coin flip network paper
+        id_counts = np.array([self._id_to_counts[id] for id in ids]) + self._count_epsilon
+        priorities = self._count_mixing / id_counts + (1 - self._count_mixing) * priorities
         self._sum_tree.set(indices, _power(priorities, self._priority_exponent))
 
     def sample(self, size: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -608,6 +611,10 @@ class PrioritizedDistribution:
             dtype=np.int64,
             count=len(indices),
         )
+
+        for id in ids:
+            self._id_to_counts[id] += 1
+
         return ids, sample_probs
 
     def get_exponentiated_priorities(self, ids: Sequence[int]) -> Sequence[float]:
