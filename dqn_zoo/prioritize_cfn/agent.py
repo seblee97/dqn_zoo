@@ -173,12 +173,11 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 "value_vars": online_source_value_vars,
             }
 
-        def cfn_loss_fn(cfn_params, cfn_batch, cfn_counts, rng_key):
+        def cfn_loss_fn(cfn_params, cfn_batch, rng_key):
             """simple MSE."""
             pred = cfn_network.apply(cfn_params, rng_key, cfn_batch.s).predictions
             loss = jnp.mean((pred - cfn_batch.cf_vector) ** 2)
 
-            priority = sum_weighting_alpha * (1 / cfn_counts) + (1 - sum_weighting_alpha) * jnp.mean(pred ** 2, axis=1) / num_coin_flips
             priority = jnp.mean(pred ** 2, axis=1)
 
             return loss, {"cfn_loss": loss, "cfn_priorities": priority}
@@ -192,7 +191,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             cfn_opt_state,
             cfn_params,
             cfn_batch,
-            cfn_counts
         ):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key, cfn_update_key = jax.random.split(rng_key, 3)
@@ -214,7 +212,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             cfn_d_loss_d_params, cfn_aux = jax.grad(cfn_loss_fn, has_aux=True)(
                 cfn_params,
                 cfn_batch,
-                cfn_counts,
                 cfn_update_key,
             )
             cfn_updates, cfn_new_opt_state = cfn_optimizer.update(
@@ -330,7 +327,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         logging.log_first_n(logging.INFO, "Begin learning", 1)
         transitions, indices, weights, _ = self._replay.sample(self._batch_size)
 
-        cfn_batch, cfn_indices, cfn_weights, cfn_counts = self._cfn_replay.sample(self._cfn_batch_size)
+        cfn_batch, cfn_indices, cfn_weights = self._cfn_replay.sample(self._cfn_batch_size)
 
         (
             self._rng_key,
@@ -349,7 +346,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             self._cfn_opt_state,
             self._cfn_params,
             cfn_batch,
-            cfn_counts
         )
         chex.assert_equal_shape((weights, aux["inverse_pseudocounts"]))
         priorities = jnp.sqrt(aux["inverse_pseudocounts"])
