@@ -220,6 +220,7 @@ def main(argv):
         FLAGS.uniform_sample_probability,
         FLAGS.normalize_weights,
         random_state,
+        count_mixing=FLAGS.sum_weighting_alpha,
     )
 
     cfn_optimizer = optax.rmsprop(
@@ -241,7 +242,6 @@ def main(argv):
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
         cfn_replay=cfn_replay,
-        sum_weighting_alpha=FLAGS.sum_weighting_alpha,
         num_coin_flips=FLAGS.num_coin_flips,
         shaping=shaping.NoPenalty(),
         mask_probability=FLAGS.mask_probability,
