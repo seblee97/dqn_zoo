@@ -460,6 +460,7 @@ class PrioritizedDistribution:
         random_state: np.random.RandomState,
         min_capacity: int = 0,
         max_capacity: Optional[int] = None,
+        count_mixing: float = 0.0 # argument alpha from eq. 6 of coin flip network paper
     ):
         if priority_exponent < 0.0:
             raise ValueError("Require priority_exponent >= 0.")
@@ -472,11 +473,14 @@ class PrioritizedDistribution:
             raise ValueError("Require min_capacity >= 0.")
         self._uniform_sample_probability = uniform_sample_probability
         self._max_capacity = max_capacity
+        self._count_mixing = count_mixing
+        self._count_epsilon = 1e-6 # ensure no infinities when dividing by zero count items
         self._sum_tree = SumTree()
         self._sum_tree.resize(min_capacity)
         self._random_state = random_state
         self._id_to_index = {}  # User ID -> sum tree index.
         self._index_to_id = {}  # Sum tree index -> user ID.
+        self._id_to_counts = {} # count of how many times each id has been sampled
         # Unused sum tree indices that can be allocated to new user IDs.
         self._inactive_indices = list(range(min_capacity))
         # Currently used sum tree indices, needed for uniform sampling.
@@ -523,6 +527,7 @@ class PrioritizedDistribution:
             self._active_indices.append(idx)
             self._id_to_index[i] = idx
             self._index_to_id[idx] = i
+            self._id_to_counts[i] = 0
             indices.append(idx)
 
         # Set priorities on sum tree.
@@ -541,6 +546,7 @@ class PrioritizedDistribution:
         for i, idx in zip(ids, indices):
             del self._id_to_index[i]
             del self._index_to_id[idx]
+            del self._id_to_counts[i]
             # Swap index to be removed with index at the end.
             j = self._active_indices_location[idx]
             self._active_indices[j], self._active_indices[-1] = (
