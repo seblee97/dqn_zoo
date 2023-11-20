@@ -325,7 +325,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
         logging.log_first_n(logging.INFO, "Begin learning", 1)
-        transitions, indices, weights, _ = self._replay.sample(self._batch_size)
+        transitions, indices, weights = self._replay.sample(self._batch_size)
 
         cfn_batch, cfn_indices, cfn_weights = self._cfn_replay.sample(self._cfn_batch_size)
 
