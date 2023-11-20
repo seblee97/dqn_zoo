@@ -644,6 +644,7 @@ class PrioritizedDistribution:
             "sum_tree": self._sum_tree.get_state(),
             "id_to_index": self._id_to_index,
             "index_to_id": self._index_to_id,
+            "id_to_counts": self._id_to_counts,
             "inactive_indices": self._inactive_indices,
             "active_indices": self._active_indices,
             "active_indices_location": self._active_indices_location,
@@ -654,6 +655,7 @@ class PrioritizedDistribution:
         self._sum_tree.set_state(state["sum_tree"])
         self._id_to_index = state["id_to_index"]
         self._index_to_id = state["index_to_id"]
+        self._id_to_counts = state["id_to_counts"]
         self._inactive_indices = state["inactive_indices"]
         self._active_indices = state["active_indices"]
         self._active_indices_location = state["active_indices_location"]
