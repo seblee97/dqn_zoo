@@ -63,8 +63,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._num_coin_flips = num_coin_flips
 
         # Initialize network parameters and optimizer.
-        self._rng_key, network_rng_key, cfn_network_rng_key = jax.random.split(
-            rng_key, 3
+        self._rng_key, network_rng_key, cfn_network_rng_key, cfn_network_prior_rng_key = jax.random.split(
+            rng_key, 4
         )
 
         self._online_params = network.init(
@@ -77,6 +77,9 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
         self._cfn_params = cfn_network.init(
             cfn_network_rng_key, sample_network_input[None, ...]
+        )
+        cfn_prior_params = cfn_network.init(
+            cfn_network_prior_rng_key, sample_network_input[None, ...]
         )
         self._cfn_opt_state = cfn_optimizer.init(self._cfn_params)
 
@@ -97,13 +100,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             return q_values
 
         self._forward = jax.jit(_forward)
-
-        def _cfn_forward(params, state):
-            _, split_key = jax.random.split(rng_key)
-            _ = cfn_network.apply(params, split_key, state).multi_head_output
-            return
-
-        self._cfn_forward = jax.jit(_cfn_forward)
 
         def loss_fn(online_params, target_params, transitions, rng_key):
             """Calculates loss given network parameters and transitions."""
@@ -175,7 +171,10 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
         def cfn_loss_fn(cfn_params, cfn_batch, rng_key):
             """simple MSE."""
-            pred = cfn_network.apply(cfn_params, rng_key, cfn_batch.s).predictions
+            rng_key, split_key = jax.random.split(rng_key, 2)
+            prior_output = cfn_network.apply(cfn_prior_params, rng_key, cfn_batch.s).predictions
+            cfn_output = cfn_network.apply(cfn_params, split_key, cfn_batch.s).predictions
+            pred = prior_output + cfn_output
             loss = jnp.mean((pred - cfn_batch.cf_vector) ** 2)
 
             priority = jnp.mean(pred ** 2, axis=1)
@@ -205,7 +204,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
 
-            cfn_predictions = cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
+            cfn_prior = cfn_network.apply(cfn_prior_params, rng_key, transitions.s_tm1).predictions
+            cfn_predictions = cfn_prior + cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
             inverse_pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
             aux["inverse_pseudocounts"] = inverse_pseudocounts
 
