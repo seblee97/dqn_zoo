@@ -65,6 +65,7 @@ flags.DEFINE_float("cfn_learning_rate", 0.00001, "")
 flags.DEFINE_integer("cfn_replay_capacity", int(2e7), "")
 flags.DEFINE_integer("cfn_update_period", 4, "")
 flags.DEFINE_float("sum_weighting_alpha", 0.5, "")
+flags.DEFINE_integer("cfn_prior_window", 30, "")
 
 flags.DEFINE_float("priority_exponent", 0.6, "")
 flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
@@ -242,6 +243,7 @@ def main(argv):
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
         cfn_replay=cfn_replay,
+        cfn_prior_window=FLAGS.cfn_prior_window,
         num_coin_flips=FLAGS.num_coin_flips,
         shaping=shaping.NoPenalty(),
         mask_probability=FLAGS.mask_probability,
