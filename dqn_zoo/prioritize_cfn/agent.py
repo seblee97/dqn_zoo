@@ -2,6 +2,8 @@
 
 from typing import Any, Callable, Mapping, Text
 
+import collections
+
 import chex
 import distrax
 import dm_env
@@ -36,6 +38,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         transition_accumulator: Any,
         replay: replay_lib.PrioritizedTransitionReplay,
         cfn_replay: replay_lib.PrioritizedTransitionReplay,
+        cfn_prior_window: int,
         shaping,
         mask_probability: float,
         num_heads: int,
@@ -82,6 +85,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             cfn_network_prior_rng_key, sample_network_input[None, ...]
         )
         self._cfn_opt_state = cfn_optimizer.init(self._cfn_params)
+
+        cfn_prior_outputs = collections.deque(maxlen=cfn_prior_window)
 
         # Other agent state: last action, frame count, etc.
         self._action = None
@@ -173,6 +178,11 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             """simple MSE."""
             rng_key, split_key = jax.random.split(rng_key, 2)
             prior_output = cfn_network.apply(cfn_prior_params, rng_key, cfn_batch.s).predictions
+            cfn_prior_outputs.append(prior_output)
+            cfn_prior_mean = jnp.mean(jnp.vstack(cfn_prior_outputs), axis=0)
+            cfn_prior_variances = jnp.var(jnp.vstack(cfn_prior_outputs), axis=0)
+            with jax.numpy_rank_promotion("allow"):
+                prior_output = (prior_output - cfn_prior_mean) / cfn_prior_variances + 1
             cfn_output = cfn_network.apply(cfn_params, split_key, cfn_batch.s).predictions
             pred = prior_output + cfn_output
             loss = jnp.mean((pred - cfn_batch.cf_vector) ** 2)
@@ -194,6 +204,16 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key, cfn_update_key = jax.random.split(rng_key, 3)
 
+            cfn_d_loss_d_params, cfn_aux = jax.grad(cfn_loss_fn, has_aux=True)(
+                cfn_params,
+                cfn_batch,
+                cfn_update_key,
+            )
+            cfn_updates, cfn_new_opt_state = cfn_optimizer.update(
+                cfn_d_loss_d_params, cfn_opt_state
+            )
+            cfn_new_params = optax.apply_updates(cfn_params, cfn_updates)
+
             d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
                 online_params,
                 target_params,
@@ -205,19 +225,15 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             new_online_params = optax.apply_updates(online_params, updates)
 
             cfn_prior = cfn_network.apply(cfn_prior_params, rng_key, transitions.s_tm1).predictions
+            # normalise by running mean/variance (sec. 3.5.2 of paper)
+            cfn_prior_mean = jnp.mean(jnp.vstack(cfn_prior_outputs), axis=0)
+            cfn_prior_variances = jnp.var(jnp.vstack(cfn_prior_outputs), axis=0)
+            with jax.numpy_rank_promotion("allow"):
+                cfn_prior = (cfn_prior - cfn_prior_mean)  / cfn_prior_variances + 1
+
             cfn_predictions = cfn_prior + cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
             inverse_pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
             aux["inverse_pseudocounts"] = inverse_pseudocounts
-
-            cfn_d_loss_d_params, cfn_aux = jax.grad(cfn_loss_fn, has_aux=True)(
-                cfn_params,
-                cfn_batch,
-                cfn_update_key,
-            )
-            cfn_updates, cfn_new_opt_state = cfn_optimizer.update(
-                cfn_d_loss_d_params, cfn_opt_state
-            )
-            cfn_new_params = optax.apply_updates(cfn_params, cfn_updates)
 
             # cf_transitions = replay_lib.MaskedTransition(
             #     s_tm1=transitions.s_tm1,
