@@ -2,6 +2,7 @@ import collections
 import datetime
 import itertools
 import os
+import json
 import sys
 import time
 import typing
@@ -18,14 +19,14 @@ from jax.config import config
 from dqn_zoo import atari_data, constants, gym_key_door, networks, parts, processors
 from dqn_zoo import replay as replay_lib
 from dqn_zoo import shaping
-from dqn_zoo.bootstrapped_dqn import agent
+from dqn_zoo.prioritize_cfn import agent
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
 flags.DEFINE_string("environment_name", "posner_env", "")
 flags.DEFINE_integer("environment_height", 84, "")
 flags.DEFINE_integer("environment_width", 84, "")
-flags.DEFINE_integer("replay_capacity", int(1e4), "")
+flags.DEFINE_integer("replay_capacity", int(1e2), "")
 flags.DEFINE_bool("compress_state", True, "")
 flags.DEFINE_bool("grayscale", False, "")
 flags.DEFINE_float("min_replay_capacity_fraction", 0.05, "")
@@ -49,8 +50,8 @@ flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
 flags.DEFINE_integer("seed", 1, "")  # GPU may introduce nondeterminism.
 flags.DEFINE_integer("num_iterations", 500, "")
-flags.DEFINE_integer("num_train_frames", int(1e4), "")  # Per iteration.
-flags.DEFINE_integer("num_eval_frames", int(1e4), "")  # Per iteration.
+flags.DEFINE_integer("num_train_frames", int(1e2), "")  # Per iteration.
+flags.DEFINE_integer("num_eval_frames", int(1e2), "")  # Per iteration.
 flags.DEFINE_integer("learn_period", 16, "")
 # flags.DEFINE_string("results_csv_path", "/tmp/results.csv", "")
 # flags.DEFINE_string("checkpoint_path", None, "")
@@ -59,19 +60,33 @@ flags.DEFINE_string("map_yaml_path", "dqn_zoo/key_door_maps/multi_room_bandit.ya
 flags.DEFINE_integer("env_scaling", 8, "")
 flags.DEFINE_multi_integer("env_shape", (84, 84, 12), "")
 flags.DEFINE_bool(
-    "variance_network", True, ""
+    "variance_network", False, ""
 )  # compute direct variance in heads (http://auai.org/uai2018/proceedings/papers/35.pdf)
 flags.DEFINE_integer(
     "visualise_values", 1, ""
 )  # iteration interval between value function visualisations
 flags.DEFINE_string("results_path", None, "")  # where to store results
 
+flags.DEFINE_integer("cfn_batch_size", 512, "")
+flags.DEFINE_integer("num_coin_flips", 20, "")
+flags.DEFINE_float("cfn_learning_rate", 0.00001, "")
+flags.DEFINE_integer("cfn_replay_capacity", int(2e7), "")
+flags.DEFINE_integer("cfn_update_period", 4, "")
+flags.DEFINE_float("sum_weighting_alpha", 0.5, "")
+flags.DEFINE_integer("cfn_prior_window", 30, "")
+
+flags.DEFINE_float("priority_exponent", 0.6, "")
+flags.DEFINE_float("importance_sampling_exponent_begin_value", 0.4, "")
+flags.DEFINE_float("importance_sampling_exponent_end_value", 1.0, "")
+flags.DEFINE_float("uniform_sample_probability", 1e-3, "")
+flags.DEFINE_bool("normalize_weights", True, "")
+
 
 def main(argv):
     """Trains Bootstrapped DQN agent on Key-Door."""
     del argv
     logging.info(
-        "Bootstrapped DQN on Key-Door on %s.", jax.lib.xla_bridge.get_backend().platform
+        "Prioritised CFN DQN on Key-Door on %s.", jax.lib.xla_bridge.get_backend().platform
     )
     random_state = np.random.RandomState(FLAGS.seed)
     rng_key = jax.random.PRNGKey(
@@ -86,6 +101,10 @@ def main(argv):
         os.makedirs(exp_path, exist_ok=True)
     else:
         exp_path = FLAGS.results_path
+
+    flag_dict = FLAGS.flag_values_dict()
+    with open(os.path.join(exp_path, "flags.json"), "+w") as json_file:
+        json.dump(flag_dict, json_file, indent=6)
 
     visualisation_path = os.path.join(exp_path, "visualisations")
     os.makedirs(visualisation_path, exist_ok=True)
@@ -125,6 +144,9 @@ def main(argv):
         num_actions, num_heads=FLAGS.num_heads, mask_probability=FLAGS.mask_probability
     )
     network = hk.transform(network_fn)
+
+    cfn_network_fn = networks.cfn_network(FLAGS.num_coin_flips)
+    cfn_network = hk.transform(cfn_network_fn)
 
     def preprocessor_builder():
         return processors.atari(
@@ -172,6 +194,16 @@ def main(argv):
         end_value=FLAGS.exploration_epsilon_end_value,
     )
 
+    importance_sampling_exponent_schedule = parts.LinearSchedule(
+        begin_t=int(FLAGS.min_replay_capacity_fraction * FLAGS.replay_capacity),
+        end_t=(
+            FLAGS.num_iterations
+            * int(FLAGS.num_train_frames / FLAGS.num_action_repeats)
+        ),
+        begin_value=FLAGS.importance_sampling_exponent_begin_value,
+        end_value=FLAGS.importance_sampling_exponent_end_value,
+    )
+
     if FLAGS.compress_state:
 
         def encoder(transition):
@@ -199,8 +231,16 @@ def main(argv):
         mask_t=None,
     )
 
-    replay = replay_lib.TransitionReplay(
-        FLAGS.replay_capacity, replay_structure, random_state, encoder, decoder
+    replay = replay_lib.PrioritizedTransitionReplay(
+        FLAGS.replay_capacity,
+        replay_structure,
+        FLAGS.priority_exponent,
+        importance_sampling_exponent_schedule,
+        FLAGS.uniform_sample_probability,
+        FLAGS.normalize_weights,
+        random_state,
+        encoder,
+        decoder,
     )
 
     optimizer = optax.rmsprop(
@@ -210,20 +250,44 @@ def main(argv):
         centered=True,
     )
 
+    cfn_replay_structure = replay_lib.CFNElement(s=None, cf_vector=None)
+
+    cfn_replay = replay_lib.PrioritizedTransitionReplay(
+        FLAGS.cfn_replay_capacity, cfn_replay_structure, 
+        FLAGS.priority_exponent,
+        importance_sampling_exponent_schedule,
+        FLAGS.uniform_sample_probability,
+        FLAGS.normalize_weights,
+        random_state,
+        count_mixing=FLAGS.sum_weighting_alpha,
+    )
+
+    cfn_optimizer = optax.rmsprop(
+        learning_rate=FLAGS.cfn_learning_rate,
+        decay=0.95,
+        eps=FLAGS.optimizer_epsilon,
+        centered=True,
+    )
+
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
-    train_agent = agent.BootstrappedDqn(
+    train_agent = agent.CFNPrioritizeUncertaintyAgent(
         preprocessor=preprocessor_builder(),
         sample_network_input=sample_network_input,
         network=network,
-        variance_network=FLAGS.variance_network,
+        cfn_network=cfn_network,
         optimizer=optimizer,
+        cfn_optimizer=cfn_optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
+        cfn_replay=cfn_replay,
+        cfn_prior_window=FLAGS.cfn_prior_window,
+        num_coin_flips=FLAGS.num_coin_flips,
         shaping=shaping.NoPenalty(),
         mask_probability=FLAGS.mask_probability,
         num_heads=FLAGS.num_heads,
         batch_size=FLAGS.batch_size,
+        cfn_batch_size=FLAGS.cfn_batch_size,
         exploration_epsilon=exploration_epsilon_schedule,
         min_replay_capacity_fraction=FLAGS.min_replay_capacity_fraction,
         learn_period=FLAGS.learn_period,
@@ -254,10 +318,13 @@ def main(argv):
 
     state = checkpoint.state
     state.iteration = 0
-    state.train_agent = train_agent.get_state()
-    state.eval_agent = eval_agent.get_state()
+    state.train_agent = train_agent
+    state.eval_agent = eval_agent
     state.random_state = random_state
-    state.writer = writer.get_state()
+    state.writer = writer
+    if checkpoint.can_be_restored():
+        checkpoint.restore()
+
 
     while state.iteration <= FLAGS.num_iterations:
         # New environment for each iteration to allow for determinism if preempted.
@@ -301,14 +368,24 @@ def main(argv):
                 variance_network=FLAGS.variance_network,
             )
 
+            # also compute counts according to CFN
+            cfn_counts = parts.compute_counts(
+                train_agent,
+                env,
+                FLAGS.num_stacked_frames,
+                FLAGS.env_shape[:2],
+            )
+
             averaged_value_means_position = env.average_values_over_positional_states(
                 state_action_value_means
             )
+
             averaged_value_stds_position = env.average_values_over_positional_states(
                 state_action_value_stds
             )
-            averaged_value_variance_position = (
-                env.average_values_over_positional_states(state_action_value_variance)
+
+            averaged_counts_position = env.average_values_over_positional_states(
+                cfn_counts
             )
 
             env.plot_heatmap_over_env(
@@ -325,13 +402,26 @@ def main(argv):
                     f"value_function_std_{state.iteration}.pdf",
                 ),
             )
+
             env.plot_heatmap_over_env(
-                heatmap=averaged_value_variance_position,
+                heatmap=averaged_counts_position,
                 save_name=os.path.join(
                     visualisation_path,
-                    f"value_function_variance_{state.iteration}.pdf",
+                    f"cfn_counts_{state.iteration}.pdf",
                 ),
             )
+
+            if FLAGS.variance_network:
+                averaged_value_variance_position = (
+                    env.average_values_over_positional_states(state_action_value_variance)
+                )
+                env.plot_heatmap_over_env(
+                    heatmap=averaged_value_variance_position,
+                    save_name=os.path.join(
+                        visualisation_path,
+                        f"value_function_variance_{state.iteration}.pdf",
+                    ),
+                )
 
         # Logging and checkpointing.
         human_normalized_score = atari_data.get_human_normalized_score(
@@ -352,15 +442,13 @@ def main(argv):
             ("normalized_return", human_normalized_score, "%.3f"),
             ("capped_normalized_return", capped_human_normalized_score, "%.3f"),
             ("human_gap", 1.0 - capped_human_normalized_score, "%.3f"),
-            ("train_loss", train_stats["train_loss"], "% 2.2f"),
-            ("shaped_reward", train_stats["shaped_reward"], "% 2.2f"),
-            ("penalties", train_stats["penalties"], "% 2.2f"),
+            ("train_loss", train_stats["_loss"], "% 2.2f"),
         ]
         log_output_str = ", ".join(("%s: " + f) % (n, v) for n, v, f in log_output)
         logging.info(log_output_str)
         writer.write(collections.OrderedDict((n, v) for n, v, _ in log_output))
         state.iteration += 1
-        checkpoint.save()
+        # checkpoint.save()
 
     writer.close()
 
