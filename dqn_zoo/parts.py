@@ -730,6 +730,37 @@ def compute_value_function(
     )
 
 
+def compute_counts(
+    agent, env, num_frame_stack: int, image_shape
+):
+    counts = {}
+
+    for tuple_state in env.state_space:
+        # width : height : channel
+        np_state_representation = env.get_state_representation(tuple_state=tuple_state)
+
+        if np_state_representation.shape[2] == 3:
+            pil_image = Image.fromarray(
+                (np_state_representation * 255).astype(np.uint8), "RGB"
+            )
+        else:
+            pil_image = Image.fromarray(np_state_representation)
+        image = pil_image.resize(image_shape, Image.BILINEAR)
+        image = np.array(image)
+        image = jnp.array(image)
+
+        # channel here is just RGB or Grayscale dim, to 'mimic' frame stacking we have to
+        # stack copies; this introduces some error.
+        stacked_representation = jnp.repeat(image, num_frame_stack, axis=2)
+        # add dummy batch dimension
+        cfn_output = agent.cfn_forward(stacked_representation[None, ...])
+
+        counts[tuple_state] = jnp.mean(cfn_output[0]).item()
+
+    return counts
+
+    
+
 class ConstantLearningRate:
     def __init__(self, learning_rate) -> None:
         self._learning_rate = learning_rate
