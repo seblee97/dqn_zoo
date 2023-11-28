@@ -81,12 +81,12 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._cfn_params = cfn_network.init(
             cfn_network_rng_key, sample_network_input[None, ...]
         )
-        cfn_prior_params = cfn_network.init(
+        self._cfn_prior_params = cfn_network.init(
             cfn_network_prior_rng_key, sample_network_input[None, ...]
         )
         self._cfn_opt_state = cfn_optimizer.init(self._cfn_params)
 
-        cfn_prior_outputs = collections.deque(maxlen=cfn_prior_window)
+        self._cfn_prior_outputs = []
 
         # Other agent state: last action, frame count, etc.
         self._action = None
@@ -106,6 +106,18 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
         self._forward = jax.jit(_forward)
 
+        def _cfn_forward(state, params, cfn_prior_params, cfn_prior_outputs):
+            _, split_key, prior_key = jax.random.split(rng_key, 3)
+            prior_output = cfn_network.apply(cfn_prior_params, prior_key, state).predictions
+            cfn_prior_mean = jnp.mean(jnp.vstack(cfn_prior_outputs), axis=0)
+            cfn_prior_variances = jnp.var(jnp.vstack(cfn_prior_outputs), axis=0)
+            with jax.numpy_rank_promotion("allow"):
+                prior_output = (prior_output - cfn_prior_mean) / cfn_prior_variances + 1
+            predictions = prior_output + cfn_network.apply(params, split_key, state).predictions
+            return predictions
+        
+        self._cfn_forward = _cfn_forward
+        
         def loss_fn(online_params, target_params, transitions, rng_key):
             """Calculates loss given network parameters and transitions."""
             _, *apply_keys = jax.random.split(rng_key, 4)
@@ -174,10 +186,12 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 "value_vars": online_source_value_vars,
             }
 
-        def cfn_loss_fn(cfn_params, cfn_batch, rng_key):
+        def cfn_loss_fn(cfn_params, cfn_prior_params, cfn_batch, cfn_prior_outputs, rng_key):
             """simple MSE."""
             rng_key, split_key = jax.random.split(rng_key, 2)
             prior_output = cfn_network.apply(cfn_prior_params, rng_key, cfn_batch.s).predictions
+            if len(cfn_prior_outputs) == cfn_prior_window:
+                cfn_prior_outputs.pop(0)
             cfn_prior_outputs.append(prior_output)
             cfn_prior_mean = jnp.mean(jnp.vstack(cfn_prior_outputs), axis=0)
             cfn_prior_variances = jnp.var(jnp.vstack(cfn_prior_outputs), axis=0)
@@ -189,7 +203,13 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
             priority = jnp.mean(pred ** 2, axis=1)
 
-            return loss, {"cfn_loss": loss, "cfn_priorities": priority}
+            return loss, {
+                "cfn_loss": loss, 
+                "cfn_priorities": priority, 
+                "cfn_prior_outputs": cfn_prior_outputs, 
+                "cfn_prior_mean": cfn_prior_mean, 
+                "cfn_prior_var": cfn_prior_variances
+                }
 
         def update(
             rng_key,
@@ -198,6 +218,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             target_params,
             transitions,
             cfn_opt_state,
+            cfn_prior_outputs,
+            cfn_prior_params,
             cfn_params,
             cfn_batch,
         ):
@@ -206,9 +228,12 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
             cfn_d_loss_d_params, cfn_aux = jax.grad(cfn_loss_fn, has_aux=True)(
                 cfn_params,
+                cfn_prior_params,
                 cfn_batch,
+                cfn_prior_outputs,
                 cfn_update_key,
             )
+
             cfn_updates, cfn_new_opt_state = cfn_optimizer.update(
                 cfn_d_loss_d_params, cfn_opt_state
             )
@@ -226,10 +251,10 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
             cfn_prior = cfn_network.apply(cfn_prior_params, rng_key, transitions.s_tm1).predictions
             # normalise by running mean/variance (sec. 3.5.2 of paper)
-            cfn_prior_mean = jnp.mean(jnp.vstack(cfn_prior_outputs), axis=0)
-            cfn_prior_variances = jnp.var(jnp.vstack(cfn_prior_outputs), axis=0)
+            cfn_prior_mean = cfn_aux["cfn_prior_mean"]
+            cfn_prior_var = cfn_aux["cfn_prior_var"]
             with jax.numpy_rank_promotion("allow"):
-                cfn_prior = (cfn_prior - cfn_prior_mean)  / cfn_prior_variances + 1
+                cfn_prior = (cfn_prior - cfn_prior_mean)  / cfn_prior_var + 1
 
             cfn_predictions = cfn_prior + cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
             inverse_pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
@@ -350,7 +375,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             self._opt_state,
             self._online_params,
             self._cfn_opt_state,
-            self._cfn_online_params,
+            self._cfn_params,
             td_errors,
             aux,
         ) = self._update(
@@ -360,9 +385,12 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             self._target_params,
             transitions,
             self._cfn_opt_state,
+            self._cfn_prior_outputs,
+            self._cfn_prior_params,
             self._cfn_params,
             cfn_batch,
         )
+        self._cfn_prior_outputs = aux.pop("cfn_prior_outputs")
         chex.assert_equal_shape((weights, aux["inverse_pseudocounts"]))
         priorities = jnp.sqrt(aux["inverse_pseudocounts"])
         priorities = jax.device_get(priorities)
@@ -420,9 +448,18 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._target_params = jax.device_put(state["target_params"])
         self._replay.set_state(state["replay"])
 
+    def cfn_forward(self, state):
+        return self._cfn_forward(
+            state=state, 
+            params=self._cfn_params, 
+            cfn_prior_params=self._cfn_prior_params, 
+            cfn_prior_outputs=self._cfn_prior_outputs
+        )
+
     def forward_all_heads(self, state, variance: bool = False):
         if variance:
             params = self._var_online_params
         else:
             params = self._online_params
         return self._forward(state=state, params=params)
+    
