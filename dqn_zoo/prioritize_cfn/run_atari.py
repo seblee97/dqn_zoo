@@ -6,6 +6,7 @@ import collections
 import datetime
 import itertools
 import os
+import json
 import sys
 import time
 import typing
@@ -93,6 +94,10 @@ def main(argv):
         os.makedirs(exp_path, exist_ok=True)
     else:
         exp_path = FLAGS.results_path
+
+    flag_dict = FLAGS.flag_values_dict()
+    with open(os.path.join(exp_path, "flags.json"), "+w") as json_file:
+        json.dump(flag_dict, json_file, indent=6)
 
     def environment_builder():
         """Creates Atari environment."""
