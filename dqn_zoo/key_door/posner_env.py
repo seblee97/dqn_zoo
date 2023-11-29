@@ -37,8 +37,7 @@ class PosnerEnv(base_environment.BaseEnvironment):
         scaling: Optional[int] = 1,
         field_x: Optional[int] = 1,
         field_y: Optional[int] = 1,
-        binarize: bool = True,
-        grayscale: bool = False,
+        grayscale: bool = True,
         batch_dimension: bool = True,
         torch_axes: bool = True,
     ) -> None:
@@ -73,7 +72,6 @@ class PosnerEnv(base_environment.BaseEnvironment):
             scaling=scaling,
             field_x=field_x,
             field_y=field_y,
-            binarize=binarize,
             grayscale=grayscale,
             batch_dimension=batch_dimension,
             torch_axes=torch_axes,
@@ -138,7 +136,7 @@ class PosnerEnv(base_environment.BaseEnvironment):
                 )
 
                 assert (
-                    self._cue_size * self._num_cues <= self._map.shape[1]
+                    self._cue_size * self._num_cues < self._map.shape[1]
                 ), "cue line (size of cue * number of cues) must be less than width of map"
         else:
             self._cue_line_depth = self._cue_specification[constants.CUE_LINE_DEPTH]
@@ -580,9 +578,7 @@ class PosnerEnv(base_environment.BaseEnvironment):
                     state=state, agent_position=agent_position
                 )
 
-            if self._binarize:
-                state = self._binarize_state(state=state)
-            elif self._grayscale:
+            if self._grayscale:
                 state = utils.rgb_to_grayscale(state)
 
             if self._torch_axes:
@@ -596,23 +592,6 @@ class PosnerEnv(base_environment.BaseEnvironment):
                 state = np.expand_dims(state, 0)
 
             return state
-
-    def _binarize_state(self, state):
-        unique_colors = np.array(
-            [
-                self.BLUE_RGB,
-                self.GREEN_RGB,
-                self.RED_RGB,
-                self.GOLD_RGB,
-                self.SILVER_RGB,
-                self.BLACK_RGB,
-            ]
-        )
-        binarized_obs = np.zeros(state.shape[:-1] + (len(unique_colors),))
-        for i in range(len(unique_colors)):
-            binarized_obs[..., i] = (state == unique_colors[i]).all(axis=-1)
-
-        return binarized_obs
 
     def _move_agent(self, delta: np.ndarray) -> float:
         """Move agent. If provisional new position is a wall, no-op."""
