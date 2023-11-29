@@ -154,7 +154,7 @@ class GymKeyDoor(dm_env.Environment):
 
     def observation_spec(self) -> Tuple[specs.Array, specs.Array]:
         return (
-            specs.Array(shape=self._env_shape, dtype=np.float, name="rgb"),
+            specs.Array(shape=self._env_shape, dtype=np.float64, name="rgb"),
             specs.Array(shape=(), dtype=np.int32, name="lives"),
         )
 
