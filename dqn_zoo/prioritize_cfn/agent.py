@@ -298,7 +298,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
         def _unnormalised_cfn_prior(params, state):
             _, split_key = jax.random.split(rng_key)
-            prior_output = cfn_network.apply(params, split_key, state).predictions
+            prior_output = cfn_network.apply(params, split_key, state.s).predictions
             return prior_output
         
         self._unnormalised_cfn_prior = jax.jit(_unnormalised_cfn_prior)
@@ -346,8 +346,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 # cfn_prior_outputs is populated in learning step
                 # we initialise prior outputs with one set of random entries 
                 # to enable computation of prior before any learning has taken place
-                sample_input = self._cfn_replay.sample(1).s
-                random_prior_output = self._unnormalised_cfn_prior(params=self._cfn_prior_params, state=sample_input)
+                sample_batch, _, _ = self._cfn_replay.sample(self._cfn_batch_size)
+                random_prior_output = self._unnormalised_cfn_prior(params=self._cfn_prior_params, state=sample_batch)
                 self._cfn_prior_outputs.append(random_prior_output)
 
             return action, {}
