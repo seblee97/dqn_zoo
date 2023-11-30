@@ -296,6 +296,13 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._select_action = jax.jit(select_action)
         # self._select_action = select_action
 
+        def _unnormalised_cfn_prior(params, state):
+            _, split_key = jax.random.split(rng_key)
+            prior_output = cfn_network.apply(params, split_key, state).predictions
+            return prior_output
+        
+        self._unnormalised_cfn_prior = jax.jit(_unnormalised_cfn_prior)
+
     def _get_random_mask(self, rng_key):
         return jax.random.choice(
             key=rng_key, a=2, shape=(self._num_heads,), p=self._mask_probabilities
@@ -331,7 +338,18 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 cf_transition = replay_lib.CFNElement(s=transition.s_tm1, cf_vector=coin_flip_vector)
                 self._cfn_replay.add(cf_transition, priority=self._cfn_max_seen_priority)
 
+        if self._cfn_replay.size < self._cfn_batch_size:
+            return action, {}
+        
         if self._replay.size < self._min_replay_capacity:
+            if not self._cfn_prior_outputs:
+                # cfn_prior_outputs is populated in learning step
+                # we initialise prior outputs with one set of random entries 
+                # to enable computation of prior before any learning has taken place
+                sample_input = self._cfn_replay.sample(1).s
+                random_prior_output = self._unnormalised_cfn_prior(params=self._cfn_prior_params, state=sample_input)
+                self._cfn_prior_outputs.append(random_prior_output)
+
             return action, {}
 
         if self._frame_t % self._learn_period == 0:
