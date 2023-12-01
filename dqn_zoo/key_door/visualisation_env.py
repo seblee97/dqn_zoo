@@ -37,41 +37,42 @@ class VisualisationEnv(wrapper.Wrapper):
             "call reset_environment() to reset environment and make it active."
             "Else render stationary environment skeleton using format='stationary'"
         if save_path:
-            if format == "cue" and self._env._cue_format is not None:
-                fig = plt.figure()
-                plot = self._env._rolling_cued_skeleton()
-                plt.imshow(plot, origin="lower")
-                if annotate is not None:
+            if format == "cue":
+                if self._env._cue_format is not None:
+                    fig = plt.figure()
+                    plot = self._env._rolling_cued_skeleton()
+                    plt.imshow(plot, origin="lower")
+                    if annotate is not None:
 
-                    def _bounding_box(x, y, width, height):
-                        rect = plt.Rectangle(
-                            (x - 0.5, y - 0.5),
-                            width,
-                            height,
-                            fill=False,
-                            color="red",
-                            linewidth=5,
+                        def _bounding_box(x, y, width, height):
+                            rect = plt.Rectangle(
+                                (x - 0.5, y - 0.5),
+                                width,
+                                height,
+                                fill=False,
+                                color="red",
+                                linewidth=5,
+                            )
+                            plt.gca().add_patch(rect)
+                            return rect
+
+                        # retrieve bounding box measurements
+                        bb_l = self._env._cue_index * self._env._cue_size
+                        bb_t = 0
+                        _bounding_box(
+                            x=bb_l,
+                            y=bb_t,
+                            width=self._env._cue_size,
+                            height=self._env._cue_line_depth,
                         )
-                        plt.gca().add_patch(rect)
-                        return rect
 
-                    # retrieve bounding box measurements
-                    bb_l = self._env._cue_index * self._env._cue_size
-                    bb_t = 0
-                    _bounding_box(
-                        x=bb_l,
-                        y=bb_t,
-                        width=self._env._cue_size,
-                        height=self._env._cue_line_depth,
-                    )
-
-                    if annotate == "full":
-                        plt.annotate(
-                            text=f"{self._env._cue_index}: {self._env._cue_validity}",
-                            xy=(bb_l, bb_t),
-                        )
-                fig.savefig(save_path, dpi=dpi)
-                plt.close()
+                        if annotate == "full":
+                            plt.annotate(
+                                text=f"{self._env._cue_index}: {self._env._cue_validity}",
+                                xy=(bb_l, bb_t),
+                            )
+                    fig.savefig(save_path, dpi=dpi)
+                    plt.close()
             else:
                 fig = plt.figure()
                 plt.imshow(
