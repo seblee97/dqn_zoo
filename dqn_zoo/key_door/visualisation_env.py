@@ -83,6 +83,7 @@ class VisualisationEnv(wrapper.Wrapper):
                     origin="lower",
                 )
             fig.savefig(save_path, dpi=dpi)
+            plt.close()
         else:
             plt.imshow(
                 self._env._env_skeleton(
@@ -94,6 +95,7 @@ class VisualisationEnv(wrapper.Wrapper):
                 ),
                 origin="lower",
             )
+            plt.close()
 
     def visualise_episode_history(
         self, save_path: str, history: Union[str, List[np.ndarray]] = "train"
