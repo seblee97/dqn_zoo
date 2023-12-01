@@ -37,8 +37,8 @@ class VisualisationEnv(wrapper.Wrapper):
             "call reset_environment() to reset environment and make it active."
             "Else render stationary environment skeleton using format='stationary'"
         if save_path:
-            fig = plt.figure()
-            if format == "cue":
+            if format == "cue" and self._env._cue_format is not None:
+                fig = plt.figure()
                 plot = self._env._rolling_cued_skeleton()
                 plt.imshow(plot, origin="lower")
                 if annotate is not None:
@@ -70,8 +70,10 @@ class VisualisationEnv(wrapper.Wrapper):
                             text=f"{self._env._cue_index}: {self._env._cue_validity}",
                             xy=(bb_l, bb_t),
                         )
-
+                fig.savefig(save_path, dpi=dpi)
+                plt.close()
             else:
+                fig = plt.figure()
                 plt.imshow(
                     self._env._env_skeleton(
                         rewards=format,
@@ -82,9 +84,10 @@ class VisualisationEnv(wrapper.Wrapper):
                     ),
                     origin="lower",
                 )
-            fig.savefig(save_path, dpi=dpi)
-            plt.close()
+                fig.savefig(save_path, dpi=dpi)
+                plt.close()
         else:
+            fig = plt.figure()
             plt.imshow(
                 self._env._env_skeleton(
                     rewards=format,
