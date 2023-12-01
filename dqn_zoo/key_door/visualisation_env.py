@@ -174,7 +174,10 @@ class VisualisationEnv(wrapper.Wrapper):
         fig = plt.figure()
         if save_name is not None:
             plt.imshow(environment_map, origin="lower", cmap=self.COLORMAP)
-            plt.colorbar()
+            cbar = plt.colorbar() 
+            num_ticks = len(cbar.get_ticks())
+            new_ticks = [round(i, 2) for i in np.linspace(current_min_value, current_max_value, num_ticks + 1)]
+            cbar.set_ticklabels(new_ticks)
             fig.savefig(save_name, dpi=60)
         else:
             divider = make_axes_locatable(ax)
