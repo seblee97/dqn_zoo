@@ -225,16 +225,17 @@ class GymKeyDoor(dm_env.Environment):
         annotated_map_path = os.path.join(self._map_path, f"annotated_map{extra}.pdf")
         # grid without cue
         self._key_door_env.render(save_path=plain_map_path)
-        # grid with cue (if applicable)
-        self._key_door_env.render(save_path=cue_map_path, format="cue")
-        # grid with cue and cue index highlighted
-        self._key_door_env.render(
-            save_path=bounding_box_map_path, format="cue", annotate=True
-        )
-        # grid with cue, cue index highlighted, validity annotated
-        self._key_door_env.render(
-            save_path=annotated_map_path, format="cue", annotate="full"
-        )
+        if self._key_door_env._cue_format is not None:
+            # grid with cue (if applicable)
+            self._key_door_env.render(save_path=cue_map_path, format="cue")
+            # grid with cue and cue index highlighted
+            self._key_door_env.render(
+                save_path=bounding_box_map_path, format="cue", annotate=True
+            )
+            # grid with cue, cue index highlighted, validity annotated
+            self._key_door_env.render(
+                save_path=annotated_map_path, format="cue", annotate="full"
+            )
 
     def _save_environment_images(self):
         self._save_environment_images_for_yaml(yaml_path=None)
