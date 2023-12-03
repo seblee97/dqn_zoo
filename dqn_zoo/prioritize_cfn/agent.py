@@ -439,6 +439,10 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
     def exploration_epsilon(self) -> float:
         """Returns epsilon value currently used by (eps-greedy) behavior policy."""
         return self._exploration_epsilon(self._frame_t)
+    
+    @property 
+    def cfn_replay_size(self) -> int:
+        return self._cfn_replay.size
 
     def get_state(self) -> Mapping[Text, Any]:
         """Retrieves agent state as a dictionary (e.g. for serialization)."""
