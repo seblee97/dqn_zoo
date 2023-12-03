@@ -350,14 +350,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         if self._replay.size < self._min_replay_capacity:
             return action, {}
         
-        if not self._cfn_prior_outputs:
-            # cfn_prior_outputs is populated in learning step
-            # we initialise prior outputs with one set of random entries 
-            # to enable computation of prior before any learning has taken place
-            sample_batch, _, _ = self._cfn_replay.sample(self._cfn_batch_size)
-            random_prior_output = self._unnormalised_cfn_prior(params=self._cfn_prior_params, state=sample_batch)
-            self._cfn_prior_outputs.append(random_prior_output)
-
         if self._frame_t % self._learn_period == 0:
             aux = self._learn()
         else:
@@ -409,12 +401,12 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             self._target_params,
             transitions,
             self._cfn_opt_state,
-            self._cfn_prior_outputs,
+            self._cfn_prior_mean,
+            self._cfn_prior_variance,
             self._cfn_prior_params,
             self._cfn_params,
             cfn_batch,
         )
-        self._cfn_prior_outputs = aux.pop("cfn_prior_outputs")
         chex.assert_equal_shape((weights, aux["inverse_pseudocounts"]))
         priorities = jnp.sqrt(aux["inverse_pseudocounts"])
         priorities = jax.device_get(priorities)
