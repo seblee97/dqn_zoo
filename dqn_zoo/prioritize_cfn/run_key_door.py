@@ -350,6 +350,7 @@ def main(argv):
             )
 
         logging.info("Training iteration %d.", state.iteration)
+        logging.info("Replay size: ", train_agent.cfn_replay_size)
         train_seq = parts.run_loop(train_agent, env, FLAGS.max_frames_per_episode)
         num_train_frames = 0 if state.iteration == 0 else FLAGS.num_train_frames
         train_seq_truncated = itertools.islice(train_seq, num_train_frames)
