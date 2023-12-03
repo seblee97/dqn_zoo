@@ -343,9 +343,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 else:
                     self._cfn_prior_mean = self._cfn_prior_sum / self._frame_t
                     self._cfn_prior_variance = self._cfn_prior_squared_sum / self._frame_t - self._cfn_prior_mean ** 2
-
-        if self._cfn_replay.size < self._cfn_batch_size:
-            return action, {}
     
         if self._replay.size < self._min_replay_capacity:
             return action, {}
