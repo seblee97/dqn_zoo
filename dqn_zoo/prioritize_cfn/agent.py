@@ -347,6 +347,9 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         if self._replay.size < self._min_replay_capacity:
             return action, {}
         
+        if self._cfn_replay.size < self._cfn_batch_size:
+            return action, {}
+        
         if self._frame_t % self._learn_period == 0:
             aux = self._learn()
         else:
