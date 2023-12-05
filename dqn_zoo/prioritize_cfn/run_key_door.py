@@ -255,6 +255,7 @@ def main(argv):
         discount_t=None,
         s_t=None,
         mask_t=None,
+        prior_output=None,
     )
 
     replay = replay_lib.PrioritizedTransitionReplay(
@@ -276,7 +277,7 @@ def main(argv):
         centered=True,
     )
 
-    cfn_replay_structure = replay_lib.CFNElement(s=None, cf_vector=None)
+    cfn_replay_structure = replay_lib.CFNElement(s=None, prior_output=None, cf_vector=None)
 
     cfn_replay = replay_lib.PrioritizedTransitionReplay(
         FLAGS.cfn_replay_capacity, 
