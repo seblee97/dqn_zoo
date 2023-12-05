@@ -58,10 +58,12 @@ class MaskedTransition(typing.NamedTuple):
     discount_t: Optional[float]
     s_t: Optional[np.ndarray]
     mask_t: Optional[np.ndarray]
+    prior_output: Optional[np.ndarray]
 
 
 class CFNElement(typing.NamedTuple):
     s: Optional[np.ndarray]
+    prior_output: Optional[np.ndarray]
     cf_vector: Optional[np.ndarray]
 
 
