@@ -117,7 +117,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             predictions = prior_output + cfn_network.apply(params, split_key, state).predictions
             return predictions
         
-        self._cfn_forward = _cfn_forward
+        self._cfn_forward = jax.jit(_cfn_forward)
         
         def loss_fn(online_params, target_params, transitions, rng_key):
             """Calculates loss given network parameters and transitions."""
@@ -187,12 +187,11 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 "value_vars": online_source_value_vars,
             }
 
-        def cfn_loss_fn(cfn_params, cfn_prior_params, cfn_batch, cfn_prior_mean, cfn_prior_variance, rng_key):
+        def cfn_loss_fn(cfn_params, cfn_batch, cfn_prior_mean, cfn_prior_variance, rng_key):
             """simple MSE."""
             rng_key, split_key = jax.random.split(rng_key, 2)
-            prior_output = cfn_network.apply(cfn_prior_params, rng_key, cfn_batch.s).predictions
             with jax.numpy_rank_promotion("allow"):
-                prior_output = (prior_output - cfn_prior_mean) / cfn_prior_variance
+                prior_output = (cfn_batch.prior_output - cfn_prior_mean) / cfn_prior_variance
             cfn_output = cfn_network.apply(cfn_params, split_key, cfn_batch.s).predictions
             pred = prior_output + cfn_output
             loss = jnp.mean((pred - cfn_batch.cf_vector) ** 2)
@@ -213,7 +212,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             cfn_opt_state,
             cfn_prior_mean,
             cfn_prior_variance,
-            cfn_prior_params,
             cfn_params,
             cfn_batch,
         ):
@@ -222,7 +220,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
             cfn_d_loss_d_params, cfn_aux = jax.grad(cfn_loss_fn, has_aux=True)(
                 cfn_params,
-                cfn_prior_params,
                 cfn_batch,
                 cfn_prior_mean,
                 cfn_prior_variance,
@@ -243,12 +240,9 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             td_error = aux["averaged_deltas"]
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
-
-            cfn_prior = cfn_network.apply(cfn_prior_params, rng_key, transitions.s_tm1).predictions
-            # normalise by running mean/variance (sec. 3.5.2 of paper)
             
             with jax.numpy_rank_promotion("allow"):
-                cfn_prior = (cfn_prior - cfn_prior_mean)  / cfn_prior_variance
+                cfn_prior = (transitions.prior_output - cfn_prior_mean)  / cfn_prior_variance
 
             cfn_predictions = cfn_prior + cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
             inverse_pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
@@ -315,6 +309,9 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
             for transition in self._transition_accumulator.step(timestep, action):
                 mask = self._get_random_mask(self._rng_key)
+
+                prior_output = self._unnormalised_cfn_prior(self._cfn_prior_params, transition.s_tm1[None, ...]).flatten()
+
                 transition = replay_lib.MaskedTransition(
                     s_tm1=transition.s_tm1,
                     a_tm1=transition.a_tm1,
@@ -322,6 +319,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                     discount_t=transition.discount_t,
                     s_t=transition.s_t,
                     mask_t=mask,
+                    prior_output=np.asarray(prior_output),
                 )
                 self._replay.add(transition, priority=self._max_seen_priority)
 
@@ -329,10 +327,8 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 coin_flip_vector = jax.random.bernoulli(cf_rng, shape=[self._num_coin_flips]).astype(int)
                 coin_flip_vector = np.asarray(coin_flip_vector.at[jnp.where(coin_flip_vector == 0)].set(-1))
 
-                cf_transition = replay_lib.CFNElement(s=transition.s_tm1, cf_vector=coin_flip_vector)
+                cf_transition = replay_lib.CFNElement(s=transition.s_tm1, prior_output=np.asarray(prior_output), cf_vector=coin_flip_vector)
                 self._cfn_replay.add(cf_transition, priority=self._cfn_max_seen_priority)
-
-                prior_output = self._unnormalised_cfn_prior(self._cfn_prior_params, cf_transition.s[None, ...]).flatten()
 
                 self._cfn_prior_sum += prior_output
                 self._cfn_prior_squared_sum += prior_output ** 2
@@ -403,7 +399,6 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             self._cfn_opt_state,
             self._cfn_prior_mean,
             self._cfn_prior_variance,
-            self._cfn_prior_params,
             self._cfn_params,
             cfn_batch,
         )
