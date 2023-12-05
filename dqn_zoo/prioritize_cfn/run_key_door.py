@@ -231,6 +231,18 @@ def main(argv):
                 s_tm1=replay_lib.uncompress_array(transition.s_tm1),
                 s_t=replay_lib.uncompress_array(transition.s_t),
             )
+        
+        def cfn_encoder(transition):
+            return transition._replace(
+                s=replay_lib.compress_array(transition.s),
+                cf_vector=replay_lib.compress_array(transition.cf_vector),
+            )
+        
+        def cfn_decoder(transition):
+            return transition._replace(
+                s=replay_lib.uncompress_array(transition.s),
+                cf_vector=replay_lib.uncompress_array(transition.cf_vector),
+            )
 
     else:
         encoder = None
@@ -267,12 +279,15 @@ def main(argv):
     cfn_replay_structure = replay_lib.CFNElement(s=None, cf_vector=None)
 
     cfn_replay = replay_lib.PrioritizedTransitionReplay(
-        FLAGS.cfn_replay_capacity, cfn_replay_structure, 
+        FLAGS.cfn_replay_capacity, 
+        cfn_replay_structure, 
         FLAGS.priority_exponent,
         importance_sampling_exponent_schedule,
         FLAGS.uniform_sample_probability,
         FLAGS.normalize_weights,
         random_state,
+        cfn_encoder,
+        cfn_decoder,
         count_mixing=FLAGS.sum_weighting_alpha,
     )
 
