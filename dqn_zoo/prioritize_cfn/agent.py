@@ -327,7 +327,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
                 cf_rng, self._rng_key = jax.random.split(self._rng_key)
                 coin_flip_vector = jax.random.bernoulli(cf_rng, shape=[self._num_coin_flips]).astype(int)
-                coin_flip_vector = coin_flip_vector.at[jnp.where(coin_flip_vector == 0)].set(-1)
+                coin_flip_vector = np.asarray(coin_flip_vector.at[jnp.where(coin_flip_vector == 0)].set(-1))
 
                 cf_transition = replay_lib.CFNElement(s=transition.s_tm1, cf_vector=coin_flip_vector)
                 self._cfn_replay.add(cf_transition, priority=self._cfn_max_seen_priority)
