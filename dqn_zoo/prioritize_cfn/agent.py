@@ -89,7 +89,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._cfn_prior_sum = jnp.zeros((self._num_coin_flips,))
         self._cfn_prior_squared_sum = jnp.zeros((self._num_coin_flips,))
         self._cfn_prior_mean = None
-        self._cfn_prior_variance = None
+        self._cfn_prior_std = None
 
         # Other agent state: last action, frame count, etc.
         self._action = None
@@ -109,11 +109,11 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
 
         self._forward = jax.jit(_forward)
 
-        def _cfn_forward(state, params, cfn_prior_params, cfn_prior_mean, cfn_prior_variance):
+        def _cfn_forward(state, params, cfn_prior_params, cfn_prior_mean, cfn_prior_std):
             _, split_key, prior_key = jax.random.split(rng_key, 3)
             prior_output = cfn_network.apply(cfn_prior_params, prior_key, state).predictions
             with jax.numpy_rank_promotion("allow"):
-                prior_output = (prior_output - cfn_prior_mean) / cfn_prior_variance
+                prior_output = (prior_output - cfn_prior_mean) / cfn_prior_std
             predictions = prior_output + cfn_network.apply(params, split_key, state).predictions
             return predictions
         
@@ -187,11 +187,11 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 "value_vars": online_source_value_vars,
             }
 
-        def cfn_loss_fn(cfn_params, cfn_batch, cfn_prior_mean, cfn_prior_variance, rng_key):
+        def cfn_loss_fn(cfn_params, cfn_batch, cfn_prior_mean, cfn_prior_std, rng_key):
             """simple MSE."""
             rng_key, split_key = jax.random.split(rng_key, 2)
             with jax.numpy_rank_promotion("allow"):
-                prior_output = (cfn_batch.prior_output - cfn_prior_mean) / cfn_prior_variance
+                prior_output = (cfn_batch.prior_output - cfn_prior_mean) / cfn_prior_std
             cfn_output = cfn_network.apply(cfn_params, split_key, cfn_batch.s).predictions
             pred = prior_output + cfn_output
             loss = jnp.mean((pred - cfn_batch.cf_vector) ** 2)
@@ -211,7 +211,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             transitions,
             cfn_opt_state,
             cfn_prior_mean,
-            cfn_prior_variance,
+            cfn_prior_std,
             cfn_params,
             cfn_batch,
         ):
@@ -222,7 +222,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 cfn_params,
                 cfn_batch,
                 cfn_prior_mean,
-                cfn_prior_variance,
+                cfn_prior_std,
                 cfn_update_key,
             )
 
@@ -242,7 +242,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             new_online_params = optax.apply_updates(online_params, updates)
             
             with jax.numpy_rank_promotion("allow"):
-                cfn_prior = (transitions.prior_output - cfn_prior_mean)  / cfn_prior_variance
+                cfn_prior = (transitions.prior_output - cfn_prior_mean)  / cfn_prior_std
 
             cfn_predictions = cfn_prior + cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
             inverse_pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
@@ -335,10 +335,10 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
                 
                 if self._cfn_prior_mean is None:
                     self._cfn_prior_mean = prior_output
-                    self._cfn_prior_variance = jnp.zeros_like(prior_output)
+                    self._cfn_prior_std = jnp.zeros_like(prior_output)
                 else:
                     self._cfn_prior_mean = self._cfn_prior_sum / self._frame_t
-                    self._cfn_prior_variance = self._cfn_prior_squared_sum / self._frame_t - self._cfn_prior_mean ** 2
+                    self._cfn_prior_std = jnp.sqrt(self._cfn_prior_squared_sum / self._frame_t - self._cfn_prior_mean ** 2)
     
         if self._replay.size < self._min_replay_capacity:
             return action, {}
@@ -398,7 +398,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             transitions,
             self._cfn_opt_state,
             self._cfn_prior_mean,
-            self._cfn_prior_variance,
+            self._cfn_prior_std,
             self._cfn_params,
             cfn_batch,
         )
@@ -469,7 +469,7 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             params=self._cfn_params, 
             cfn_prior_params=self._cfn_prior_params, 
             cfn_prior_mean=self._cfn_prior_mean,
-            cfn_prior_variance=self._cfn_prior_variance,
+            cfn_prior_std=self._cfn_prior_std,
         )
 
     def forward_all_heads(self, state, variance: bool = False):
