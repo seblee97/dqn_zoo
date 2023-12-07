@@ -406,6 +406,9 @@ def main(argv):
                 FLAGS.num_stacked_frames,
                 FLAGS.env_shape[:2],
             )
+            true_counts = env.state_visitation_counts
+            count_diffs = {k: np.abs(v - true_counts[k]) for k, v in cfn_counts.items()}
+
 
             averaged_value_means_position = env.average_values_over_positional_states(
                 state_action_value_means
@@ -417,6 +420,14 @@ def main(argv):
 
             averaged_counts_position = env.average_values_over_positional_states(
                 cfn_counts
+            )
+
+            averaged_true_counts_position = env.average_values_over_positional_states(
+                true_counts
+            )
+
+            averaged_count_diffs_position = env.average_values_over_positional_states(
+                count_diffs
             )
 
             env.plot_heatmap_over_env(
@@ -442,6 +453,21 @@ def main(argv):
                 ),
             )
 
+            env.plot_heatmap_over_env(
+                heatmap=averaged_true_counts_position,
+                save_name=os.path.join(
+                    visualisation_path,
+                    f"true_counts_{state.iteration}.pdf",
+                ),
+            )
+            env.plot_heatmap_over_env(
+                heatmap=averaged_count_diffs_position,
+                save_name=os.path.join(
+                    visualisation_path,
+                    f"count_diffs_{state.iteration}.pdf",
+                ),
+            )
+
             if FLAGS.variance_network:
                 averaged_value_variance_position = (
                     env.average_values_over_positional_states(state_action_value_variance)
@@ -459,6 +485,7 @@ def main(argv):
             FLAGS.environment_name, eval_stats["episode_return"]
         )
         capped_human_normalized_score = np.amin([1.0, human_normalized_score])
+
         log_output = [
             ("iteration", state.iteration, "%3d"),
             ("frame", state.iteration * FLAGS.num_train_frames, "%5d"),

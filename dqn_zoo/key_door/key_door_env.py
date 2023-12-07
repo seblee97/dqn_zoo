@@ -69,6 +69,7 @@ class KeyDoorEnv(base_environment.BaseEnvironment):
 
         # states are zero, -1 removes walls from counts.
         self._visitation_counts = -1 * copy.deepcopy(self._map)
+        self._state_visitation_counts = {state: 0 for state in self._state_space}
 
     def _setup_environment(
         self, map_yaml_path: str, map_ascii_path: Optional[str] = None
@@ -419,6 +420,7 @@ class KeyDoorEnv(base_environment.BaseEnvironment):
             self._visitation_counts[self._agent_position[1]][
                 self._agent_position[0]
             ] += 1
+            self._state_visitation_counts[new_state] += 1
             self._train_episode_position_history.append(tuple(self._agent_position))
             self._train_episode_history.append(skeleton)
             if self._representation == constants.PO_PIXEL:

@@ -83,6 +83,7 @@ class PosnerEnv(base_environment.BaseEnvironment):
 
         # states are zero, -1 removes walls from counts.
         self._visitation_counts = -1 * copy.deepcopy(self._map)
+        self._state_visitation_counts = {state: 0 for state in self._state_space}
 
     def _setup_environment(
         self, map_yaml_path: str, map_ascii_path: Optional[str] = None

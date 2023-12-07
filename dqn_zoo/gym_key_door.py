@@ -72,7 +72,7 @@ class GymKeyDoor(dm_env.Environment):
     def reset(self, train: bool) -> dm_env.TimeStep:
         """Resets the environment and starts a new episode."""
         if self._training:
-            if self._train_index % 10 == 0 and self._train_index != 0:
+            if self._train_index % 100 == 0 and self._train_index != 0:
                 try:
                     self._key_door_env.visualise_episode_history(
                         os.path.join(
@@ -216,6 +216,10 @@ class GymKeyDoor(dm_env.Environment):
     @property
     def test_index(self):
         return self._test_index
+    
+    @property
+    def state_visitation_counts(self):
+        return self._key_door_env.state_visitation_counts
 
     def _save_environment_images_for_yaml(self, yaml_path, extra=""):
         self._key_door_env.reset_environment(map_yaml_path=yaml_path)
@@ -361,4 +365,8 @@ class RandomNoopsEnvironmentWrapper(dm_env.Environment):
     @property
     def test_index(self):
         return self._environment.test_index
+    
+    @property
+    def state_visitation_counts(self):
+        return self._environment.state_visitation_counts
         

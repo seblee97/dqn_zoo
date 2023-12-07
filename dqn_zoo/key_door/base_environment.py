@@ -118,6 +118,10 @@ class BaseEnvironment(abc.ABC):
     @property
     def visitation_counts(self) -> np.ndarray:
         return self._visitation_counts
+    
+    @property
+    def state_visitation_counts(self) -> np.ndarray:
+        return self._state_visitation_counts
 
     @property
     def train_episode_history(self) -> List[np.ndarray]:

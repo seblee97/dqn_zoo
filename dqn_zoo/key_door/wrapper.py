@@ -42,6 +42,10 @@ class Wrapper(base_environment.BaseEnvironment):
         return self._env.positional_state_space
 
     @property
+    def state_visitation_counts(self) -> np.ndarray:
+        return self._env.state_visitation_counts
+
+    @property
     def visitation_counts(self) -> np.ndarray:
         return self._env.visitation_counts
 
