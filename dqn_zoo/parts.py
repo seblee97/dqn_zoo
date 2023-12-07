@@ -753,7 +753,7 @@ def compute_counts(
         # add dummy batch dimension
         cfn_output = agent.cfn_forward(stacked_representation[None, ...])
 
-        counts[tuple_state] = jnp.mean(cfn_output[0]).item()
+        counts[tuple_state] = jnp.mean(cfn_output[0] ** 2).item()
 
     return counts
 
