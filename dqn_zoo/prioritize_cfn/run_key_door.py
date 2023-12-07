@@ -474,6 +474,8 @@ def main(argv):
             ("capped_normalized_return", capped_human_normalized_score, "%.3f"),
             ("human_gap", 1.0 - capped_human_normalized_score, "%.3f"),
             ("train_loss", train_stats["_loss"], "% 2.2f"),
+            ("cfn_loss", train_stats.get("cfn_loss", np.nan), "% 2.2f"),
+            ("inverse_pseudocounts", train_stats.get("inverse_pseudocounts", np.nan), "% 2.2f"),
         ]
         log_output_str = ", ".join(("%s: " + f) % (n, v) for n, v, f in log_output)
         logging.info(log_output_str)
