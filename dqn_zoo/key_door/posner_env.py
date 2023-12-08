@@ -723,7 +723,13 @@ class PosnerEnv(base_environment.BaseEnvironment):
             self._visitation_counts[self._agent_position[1]][
                 self._agent_position[0]
             ] += 1
-            self._state_visitation_counts[new_state] += 1
+            tuple_state = (
+                tuple(self._agent_position) + 
+                tuple(self._keys_1_state) + 
+                tuple(self._keys_2_state) + 
+                tuple(self._rewards_state)
+            )
+            self._state_visitation_counts[tuple_state] += 1
             self._train_episode_position_history.append(tuple(self._agent_position))
             self._train_episode_history.append(full_skeleton)
             if self._representation == constants.PO_PIXEL:
