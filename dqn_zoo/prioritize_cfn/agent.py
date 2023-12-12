@@ -66,9 +66,12 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
         self._num_coin_flips = num_coin_flips
 
         # Initialize network parameters and optimizer.
-        self._rng_key, network_rng_key, cfn_network_rng_key, cfn_network_prior_rng_key = jax.random.split(
-            rng_key, 4
-        )
+        (
+            self._rng_key,
+            network_rng_key,
+            cfn_network_rng_key,
+            cfn_network_prior_rng_key,
+        ) = jax.random.split(rng_key, 4)
 
         self._online_params = network.init(
             network_rng_key, sample_network_input[None, ...]
@@ -113,8 +116,10 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             _, split_key, prior_key = jax.random.split(rng_key, 3)
             prior_output = cfn_network.apply(cfn_prior_params, prior_key, state).predictions
             with jax.numpy_rank_promotion("allow"):
-                prior_output = (prior_output - cfn_prior_mean) / cfn_prior_std
-            predictions = prior_output + cfn_network.apply(params, split_key, state).predictions
+                prior_output = (prior_output - cfn_prior_mean) / (cfn_prior_std + 1e-8)
+            predictions = (
+                prior_output + cfn_network.apply(params, split_key, state).predictions
+            )
             return predictions
         
         self._cfn_forward = jax.jit(_cfn_forward)
@@ -191,8 +196,12 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             """simple MSE."""
             rng_key, split_key = jax.random.split(rng_key, 2)
             with jax.numpy_rank_promotion("allow"):
-                prior_output = (cfn_batch.prior_output - cfn_prior_mean) / cfn_prior_std
-            cfn_output = cfn_network.apply(cfn_params, split_key, cfn_batch.s).predictions
+                prior_output = (cfn_batch.prior_output - cfn_prior_mean) / (
+                    cfn_prior_std + 1e-8
+                )
+            cfn_output = cfn_network.apply(
+                cfn_params, split_key, cfn_batch.s
+            ).predictions
             pred = prior_output + cfn_output
             loss = jnp.mean((pred - cfn_batch.cf_vector) ** 2)
 
@@ -240,12 +249,17 @@ class CFNPrioritizeUncertaintyAgent(parts.Agent):
             td_error = aux["averaged_deltas"]
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
-            
-            with jax.numpy_rank_promotion("allow"):
-                cfn_prior = (transitions.prior_output - cfn_prior_mean)  / cfn_prior_std
 
-            cfn_predictions = cfn_prior + cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
-            inverse_pseudocounts = jnp.mean(cfn_predictions ** 2, axis=1)
+            with jax.numpy_rank_promotion("allow"):
+                cfn_prior = (transitions.prior_output - cfn_prior_mean) / (
+                    cfn_prior_std + 1e-8
+                )
+
+            cfn_predictions = (
+                cfn_prior
+                + cfn_network.apply(cfn_params, rng_key, transitions.s_tm1).predictions
+            )
+            inverse_pseudocounts = jnp.mean(cfn_predictions**2, axis=1)
             aux["inverse_pseudocounts"] = inverse_pseudocounts
 
             # cf_transitions = replay_lib.MaskedTransition(
