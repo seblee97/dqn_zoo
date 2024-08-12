@@ -37,7 +37,7 @@ import jax
 import numpy as np
 import optax
 from absl import app, flags, logging
-from jax.config import config
+from jax import config
 
 from dqn_zoo import atari_data, constants, gym_atari, networks, parts, processors
 from dqn_zoo import replay as replay_lib

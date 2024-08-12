@@ -32,7 +32,7 @@ import chex
 import dm_env
 import haiku as hk
 import jax
-from jax.config import config
+from jax import config
 import jax.numpy as jnp
 import numpy as np
 import optax
@@ -127,7 +127,7 @@ def main(argv):
     )
 
   # Create sample network input from sample preprocessor output.
-  sample_processed_timestep = preprocessor_builder()(env.reset())
+  sample_processed_timestep = preprocessor_builder()(env.reset(train=False))
   sample_processed_timestep = typing.cast(dm_env.TimeStep,
                                           sample_processed_timestep)
   sample_network_input = sample_processed_timestep.observation

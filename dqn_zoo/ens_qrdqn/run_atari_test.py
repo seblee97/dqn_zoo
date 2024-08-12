@@ -17,8 +17,9 @@
 # pylint: disable=g-bad-import-order
 
 from absl import flags
+# from run_atari import FLAGS
 from absl.testing import flagsaver
-from jax.config import config
+from jax import config
 
 from dqn_zoo.qrdqn import run_atari
 from absl.testing import absltest

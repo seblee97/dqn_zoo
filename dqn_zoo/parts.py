@@ -108,7 +108,12 @@ def run_loop(
         timestep_t = environment.reset(train=train)  # timestep_0.
 
         while True:  # For each step in the current episode.
-            a_t, aux = agent.step(timestep_t)
+            hardcoded_fix = agent.step(timestep_t)
+            if isinstance(hardcoded_fix, int):
+                a_t = hardcoded_fix
+                aux = {}
+            else:
+                a_t, aux = agent.step(timestep_t)
             yield environment, timestep_t, agent, a_t, aux
 
             # Update t after one environment step and agent step and relabel.
