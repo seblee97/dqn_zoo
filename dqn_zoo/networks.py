@@ -427,7 +427,9 @@ def ensc51_atari_network(
         network_output = network(inputs)
         q_logits = jnp.reshape(network_output, (-1, ens_size, num_actions, num_atoms))
         q_dist = jax.nn.softmax(q_logits)
-        q_values = jnp.sum(q_dist * support[None, None, None, :], axis=3)
+        full_q = jnp.sum(q_dist * support[None, None, None, :], axis=3)
+
+        q_values = jnp.mean(full_q, axis=1)
         q_values = jax.lax.stop_gradient(q_values)
         return EnsC51NetworkOutputs(
             q_logits=q_logits,
