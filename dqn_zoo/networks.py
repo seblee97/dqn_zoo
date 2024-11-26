@@ -68,6 +68,13 @@ class C51NetworkOutputs(typing.NamedTuple):
     q_logits: jnp.ndarray
 
 
+class C51NetworkOutputs(typing.NamedTuple):
+    q_values: jnp.ndarray
+    q_logits: jnp.ndarray
+    aleatoric_uncertainty: jnp.ndarray
+    epistemic_uncertainty: jnp.ndarray
+
+
 def _dqn_default_initializer(num_input_units: int) -> hk.initializers.Initializer:
     """Default initialization scheme inherited from past implementations of DQN.
 
@@ -345,17 +352,13 @@ def ens_qr_atari_network(
             ]
         )
         network_output = network(inputs)
-        full_q = jnp.reshape(
-            network_output, (-1, ens_size, num_quantiles, num_actions)
-        )
+        full_q = jnp.reshape(network_output, (-1, ens_size, num_quantiles, num_actions))
 
         # Batch x Quantiles x Actions
         q_dist_means = jnp.mean(full_q, axis=1)  # mean over ensemble dimension
         # Batch x Actions
-        q_values = jnp.mean(
-            q_dist_means, axis=1
-        )  # mean over quantiles
-        aleatoric_uncertainty = jnp.var(q_dist_means, axis=1) # var over quantiles
+        q_values = jnp.mean(q_dist_means, axis=1)  # mean over quantiles
+        aleatoric_uncertainty = jnp.var(q_dist_means, axis=1)  # var over quantiles
 
         # Batch x Quantiles x Actions
         q_dist_vars = jnp.var(full_q, axis=1)  # variance over ensemble dimension
@@ -363,8 +366,8 @@ def ens_qr_atari_network(
         epistemic_uncertainty = jnp.mean(q_dist_vars, axis=1)
 
         # Batch x Ensemble x Actions
-        q_dists = jnp.mean(full_q, axis=2) # mean over quantile dimension
-        q_values_var = jnp.var(q_dists, axis=1) # variance over ensemble dimension
+        q_dists = jnp.mean(full_q, axis=2)  # mean over quantile dimension
+        q_values_var = jnp.var(q_dists, axis=1)  # variance over ensemble dimension
 
         q_values = jax.lax.stop_gradient(q_values)
         q_values_var = jax.lax.stop_gradient(q_values_var)
@@ -376,7 +379,7 @@ def ens_qr_atari_network(
             q_values=q_values,
             q_values_var=q_values_var,
             aleatoric_uncertainty=aleatoric_uncertainty,
-            epistemic_uncertainty=epistemic_uncertainty
+            epistemic_uncertainty=epistemic_uncertainty,
         )
 
     return net_fn
@@ -402,6 +405,31 @@ def c51_atari_network(num_actions: int, support: jnp.ndarray) -> NetworkFn:
         q_values = jnp.sum(q_dist * support[None, None, :], axis=2)
         q_values = jax.lax.stop_gradient(q_values)
         return C51NetworkOutputs(q_logits=q_logits, q_values=q_values)
+
+    return net_fn
+
+
+def ensc51_atari_network(
+    num_actions: int, support: jnp.ndarray, ens_size: int
+) -> NetworkFn:
+
+    chex.assert_rank(support, 1)
+    num_atoms = len(support)
+
+    def net_fn(inputs):
+        """Function representing C51 Q-network."""
+        network = hk.Sequential(
+            [
+                dqn_torso(),
+                dqn_value_head(num_actions * num_atoms * ens_size),
+            ]
+        )
+        network_output = network(inputs)
+        q_logits = jnp.reshape(network_output, (-1, num_actions, num_atoms))
+        q_dist = jax.nn.softmax(q_logits)
+        q_values = jnp.sum(q_dist * support[None, None, :], axis=2)
+        q_values = jax.lax.stop_gradient(q_values)
+        return EnsC51NetworkOutputs(q_logits=q_logits, q_values=q_values)
 
     return net_fn
 
