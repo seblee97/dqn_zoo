@@ -121,7 +121,7 @@ def main(argv):
     num_actions = env.action_spec().num_values
     support = jnp.linspace(-FLAGS.vmax, FLAGS.vmax, FLAGS.num_atoms)
     # network_fn = networks.c51_atari_network(num_actions, support)
-    network_fn = networks.ensc51_atari_network(num_actions, support)
+    network_fn = networks.ensc51_atari_network(num_actions, support, FLAGS.ens_size)
     network = hk.transform(network_fn)
 
     def preprocessor_builder():
