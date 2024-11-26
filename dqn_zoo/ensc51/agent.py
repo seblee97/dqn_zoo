@@ -36,6 +36,7 @@ from dqn_zoo import replay as replay_lib
 _batch_categorical_q_learning = jax.vmap(
     rlax.categorical_q_learning, in_axes=(None, 0, 0, 0, 0, None, 0)
 )
+_select_actions = jax.vmap(lambda q, a: q[a])
 
 
 class C51(parts.Agent):
@@ -92,19 +93,21 @@ class C51(parts.Agent):
         def loss_fn(online_params, target_params, transitions, rng_key):
             """Calculates loss given network parameters and transitions."""
             _, online_key, target_key = jax.random.split(rng_key, 3)
-            logits_q_tm1 = network.apply(
-                online_params, online_key, transitions.s_tm1
-            ).q_logits
-            logits_target_q_t = network.apply(
-                target_params, target_key, transitions.s_t
-            ).q_logits
+            dist_q_tm1 = network.apply(online_params, online_key, transitions.s_tm1)
+            dist_target_q_t = network.apply(target_params, target_key, transitions.s_t)
 
             # Batch x Ensemble : Tau : Actions
             flattened_logits_q_tm1 = jnp.reshape(
-                logits_q_tm1, (-1, logits_q_tm1[2], logits_q_tm1[3])
+                dist_q_tm1.q_logits,
+                (-1, dist_q_tm1.q_logits.shape[2], dist_q_tm1.q_logits.shape[3]),
             )
             flattened_logits_target_q_t = jnp.reshape(
-                logits_target_q_t, (-1, logits_target_q_t[2], logits_target_q_t[3])
+                dist_target_q_t.q_logits,
+                (
+                    -1,
+                    dist_target_q_t.q_logits.shape[2],
+                    dist_target_q_t.q_logits.shape[3],
+                ),
             )
 
             # Batch x Ensemble
@@ -132,17 +135,49 @@ class C51(parts.Agent):
 
             loss = jnp.sum(loss) / jnp.sum(mask)
 
-            return loss
+            # compute logging quantities
+            # mean over actions
+            mean_q = jnp.mean(dist_q_tm1.q_values, axis=1)
+            mean_q_var = jnp.mean(dist_q_tm1.q_values_var, axis=1)
+            mean_epistemic = jnp.mean(dist_q_tm1.epistemic_uncertainty, axis=1)
+            mean_aleatoric = jnp.mean(dist_q_tm1.aleatoric_uncertainty, axis=1)
 
-        def update(rng_key, opt_state, online_params, target_params, transitions):
+            # quantities of action chosen
+            q_select = _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
+            q_var_select = _select_actions(dist_q_tm1.q_values_var, transitions.a_tm1)
+            epistemic_select = _select_actions(
+                dist_q_tm1.epistemic_uncertainty, transitions.a_tm1
+            )
+            aleatoric_select = _select_actions(
+                dist_q_tm1.aleatoric_uncertainty, transitions.a_tm1
+            )
+
+            td_errors = jnp.mean(losses.reshape((-1, ens_size)), axis=1)
+
+            return loss, {
+                "loss": loss,
+                "td_errors": td_errors,
+                "mean_q": mean_q,
+                "mean_q_var": mean_q_var,
+                "mean_epistemic": mean_epistemic,
+                "mean_aleatoric": mean_aleatoric,
+                "q_select": q_select,
+                "q_var_select": q_var_select,
+                "epistemic_select": epistemic_select,
+                "aleatoric_select": aleatoric_select,
+            }
+
+        def update(
+            rng_key, opt_state, online_params, target_params, transitions, weights
+        ):
             """Computes learning update from batch of replay transitions."""
             rng_key, update_key = jax.random.split(rng_key)
-            d_loss_d_params = jax.grad(loss_fn)(
-                online_params, target_params, transitions, update_key
+            d_loss_d_params, aux = jax.grad(loss_fn, has_aux=True)(
+                online_params, target_params, transitions, weights, update_key
             )
             updates, new_opt_state = optimizer.update(d_loss_d_params, opt_state)
             new_online_params = optax.apply_updates(online_params, updates)
-            return rng_key, new_opt_state, new_online_params
+            return rng_key, new_opt_state, new_online_params, aux
 
         self._update = jax.jit(update)
 
@@ -170,7 +205,19 @@ class C51(parts.Agent):
             action = self._action = self._act(timestep)
 
             for transition in self._transition_accumulator.step(timestep, action):
-                self._replay.add(transition)
+                mask = self._get_random_mask(self._rng_key)
+                transition = replay_lib.MaskedTransition(
+                    s_tm1=transition.s_tm1,
+                    a_tm1=transition.a_tm1,
+                    r_t=transition.r_t,
+                    discount_t=transition.discount_t,
+                    s_t=transition.s_t,
+                    mask_t=mask,
+                )
+                if self._prioritise:
+                    self._replay.add(transition, priority=self._max_seen_priority)
+                else:
+                    self._replay.add(transition)
 
         if self._replay.size < self._min_replay_capacity:
             return action
@@ -205,14 +252,42 @@ class C51(parts.Agent):
     def _learn(self) -> None:
         """Samples a batch of transitions from replay and learns from it."""
         logging.log_first_n(logging.INFO, "Begin learning", 1)
-        transitions = self._replay.sample(self._batch_size)
-        self._rng_key, self._opt_state, self._online_params = self._update(
-            self._rng_key,
-            self._opt_state,
-            self._online_params,
-            self._target_params,
-            transitions,
-        )
+        if self._prioritise is not None:
+            transitions, indices, weights = self._replay.sample(self._batch_size)
+            self._rng_key, self._opt_state, self._online_params, aux = self._update(
+                self._rng_key,
+                self._opt_state,
+                self._online_params,
+                self._target_params,
+                transitions,
+                weights,
+            )
+        else:
+            transitions = self._replay.sample(self._batch_size)
+            self._rng_key, self._opt_state, self._online_params, aux = self._update(
+                self._rng_key,
+                self._opt_state,
+                self._online_params,
+                self._target_params,
+                transitions,
+                None,
+            )
+        if self._prioritise is not None:
+            if self._prioritise == "uncertainty":
+                chex.assert_equal_shape((weights, aux["mean_epistemic"]))
+                priorities = jnp.abs(aux["mean_epistemic"])
+                priorities = jax.device_get(priorities)
+            elif self._prioritise == "td":
+                chex.assert_equal_shape((weights, aux["td_errors"]))
+                priorities = jnp.abs(aux["td_errors"])
+            priorities = jax.device_get(priorities)
+            max_priority = priorities.max()
+            self._max_seen_priority = np.max([self._max_seen_priority, max_priority])
+            self._replay.update_priorities(indices, priorities)
+
+        aux = {k: jnp.mean(v) for k, v in aux.items()}
+
+        return aux
 
     @property
     def online_params(self) -> parts.NetworkParams:
