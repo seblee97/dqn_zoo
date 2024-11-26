@@ -178,17 +178,40 @@ def main(argv):
         encoder = None
         decoder = None
 
-    replay_structure = replay_lib.Transition(
+    replay_structure = replay_lib.MaskedTransition(
         s_tm1=None,
         a_tm1=None,
         r_t=None,
         discount_t=None,
         s_t=None,
+        mask_t=None,
     )
 
-    replay = replay_lib.TransitionReplay(
-        FLAGS.replay_capacity, replay_structure, random_state, encoder, decoder
-    )
+    if FLAGS.prioritise is not None:
+        importance_sampling_exponent_schedule = parts.LinearSchedule(
+            begin_t=int(FLAGS.min_replay_capacity_fraction * FLAGS.replay_capacity),
+            end_t=(
+                FLAGS.num_iterations
+                * int(FLAGS.num_train_frames / FLAGS.num_action_repeats)
+            ),
+            begin_value=FLAGS.importance_sampling_exponent_begin_value,
+            end_value=FLAGS.importance_sampling_exponent_end_value,
+        )
+        replay = replay_lib.PrioritizedTransitionReplay(
+            FLAGS.replay_capacity,
+            replay_structure,
+            FLAGS.priority_exponent,
+            importance_sampling_exponent_schedule,
+            FLAGS.uniform_sample_probability,
+            FLAGS.normalize_weights,
+            random_state,
+            encoder,
+            decoder,
+        )
+    else:
+        replay = replay_lib.TransitionReplay(
+            FLAGS.replay_capacity, replay_structure, random_state, encoder, decoder
+        )
 
     optimizer = optax.adam(
         learning_rate=FLAGS.learning_rate, eps=FLAGS.optimizer_epsilon
