@@ -68,7 +68,7 @@ class C51NetworkOutputs(typing.NamedTuple):
     q_logits: jnp.ndarray
 
 
-class C51NetworkOutputs(typing.NamedTuple):
+class EnsC51NetworkOutputs(typing.NamedTuple):
     q_values: jnp.ndarray
     q_logits: jnp.ndarray
     aleatoric_uncertainty: jnp.ndarray
