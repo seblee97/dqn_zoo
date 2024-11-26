@@ -273,6 +273,14 @@ class C51(parts.Agent):
                 None,
             )
         if self._prioritise is not None:
+            if self._prioritise == "uper":
+                priorities = 0.5 * jnp.log(
+                    1 + aux["mean_epistemic"] / aux["mean_aleatoric"]
+                )
+            if self._prioritise == "uper_select":
+                priorities = 0.5 * jnp.log(
+                    1 + aux["epistemic_select"] / aux["aleatoric_select"]
+                )
             if self._prioritise == "uncertainty":
                 chex.assert_equal_shape((weights, aux["mean_epistemic"]))
                 priorities = jnp.abs(aux["mean_epistemic"])
