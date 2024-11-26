@@ -427,15 +427,27 @@ def ensc51_atari_network(
         network_output = network(inputs)
         q_logits = jnp.reshape(network_output, (-1, ens_size, num_actions, num_atoms))
         q_dist = jax.nn.softmax(q_logits)
-        full_q = jnp.sum(q_dist * support[None, None, None, :], axis=3)
 
-        q_values = jnp.mean(full_q, axis=1)
+        full_q = q_dist * support[None, None, None, :]
+
+        # clements (fudged for atoms vs quantiles)
+        epistemic_uncertainty = jnp.mean(jnp.var(full_q, axis=1), axis=-1)
+        aleatoric_uncertainty = jnp.var(jnp.mean(full_q, axis=1), axis=-1)
+
+        ens_q_vals = jnp.sum(full_q, axis=3)
+        q_values = jnp.mean(ens_q_vals, axis=1)  # mean over ensemble
+
         q_values = jax.lax.stop_gradient(q_values)
+        aleatoric_uncertainty = jax.lax.stop_gradient(aleatoric_uncertainty)
+        epistemic_uncertainty = jax.lax.stop_gradient(epistemic_uncertainty)
+
+        aleatoric_uncertainty = jnp.var(q_values, axis=1)  # var over distributions
+
         return EnsC51NetworkOutputs(
             q_logits=q_logits,
             q_values=q_values,
-            epistemic_uncertainty=None,
-            aleatoric_uncertainty=None,
+            epistemic_uncertainty=epistemic_uncertainty,
+            aleatoric_uncertainty=aleatoric_uncertainty,
         )
 
     return net_fn
