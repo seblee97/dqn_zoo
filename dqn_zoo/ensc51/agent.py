@@ -39,8 +39,8 @@ _batch_categorical_q_learning = jax.vmap(
 _select_actions = jax.vmap(lambda q, a: q[a])
 
 
-class C51(parts.Agent):
-    """C51 agent."""
+class EnsC51(parts.Agent):
+    """Ens C51 agent."""
 
     def __init__(
         self,
@@ -66,6 +66,7 @@ class C51(parts.Agent):
         self._transition_accumulator = transition_accumulator
         self._mask_probabilities = jnp.array([mask_probability, 1 - mask_probability])
         self._ens_size = ens_size
+        self._prioritise = prioritise
         self._batch_size = batch_size
         self._exploration_epsilon = exploration_epsilon
         self._min_replay_capacity = min_replay_capacity_fraction * replay.capacity
