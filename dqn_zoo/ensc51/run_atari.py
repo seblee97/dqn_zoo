@@ -90,7 +90,7 @@ flags.DEFINE_bool("normalize_weights", True, "")
 def main(argv):
     """Trains C51 agent on Atari."""
     del argv
-    logging.info("C51 on Atari on %s.", jax.lib.xla_bridge.get_backend().platform)
+    logging.info("Ens C51 on Atari on %s.", jax.lib.xla_bridge.get_backend().platform)
     random_state = np.random.RandomState(FLAGS.seed)
     rng_key = jax.random.PRNGKey(
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
