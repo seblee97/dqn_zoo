@@ -147,7 +147,7 @@ class EnsC51(parts.Agent):
             # compute logging quantities
             # mean over actions
             mean_q = jnp.mean(dist_q_tm1.q_values, axis=1)
-            mean_q_var = jnp.mean(dist_q_tm1.q_values_var, axis=1)
+            # mean_q_var = jnp.mean(dist_q_tm1.q_values_var, axis=1)
             mean_epistemic = jnp.mean(dist_q_tm1.epistemic_uncertainty, axis=1)
             mean_aleatoric = jnp.mean(dist_q_tm1.aleatoric_uncertainty, axis=1)
 
@@ -167,7 +167,7 @@ class EnsC51(parts.Agent):
                 "loss": loss,
                 "td_errors": td_errors,
                 "mean_q": mean_q,
-                "mean_q_var": mean_q_var,
+                # "mean_q_var": mean_q_var,
                 "mean_epistemic": mean_epistemic,
                 "mean_aleatoric": mean_aleatoric,
                 "q_select": q_select,
