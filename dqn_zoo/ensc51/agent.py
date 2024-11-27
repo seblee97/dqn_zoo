@@ -153,7 +153,7 @@ class EnsC51(parts.Agent):
 
             # quantities of action chosen
             q_select = _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
-            q_var_select = _select_actions(dist_q_tm1.q_values_var, transitions.a_tm1)
+            # q_var_select = _select_actions(dist_q_tm1.q_values_var, transitions.a_tm1)
             epistemic_select = _select_actions(
                 dist_q_tm1.epistemic_uncertainty, transitions.a_tm1
             )
@@ -171,7 +171,7 @@ class EnsC51(parts.Agent):
                 "mean_epistemic": mean_epistemic,
                 "mean_aleatoric": mean_aleatoric,
                 "q_select": q_select,
-                "q_var_select": q_var_select,
+                # "q_var_select": q_var_select,
                 "epistemic_select": epistemic_select,
                 "aleatoric_select": aleatoric_select,
             }
