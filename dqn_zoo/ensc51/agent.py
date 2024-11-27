@@ -91,7 +91,7 @@ class EnsC51(parts.Agent):
         # class methods, to emphasize that these are meant to be pure functions
         # and should not access the agent object's state via `self`.
 
-        def loss_fn(online_params, target_params, transitions, rng_key):
+        def loss_fn(online_params, target_params, transitions, weights, rng_key):
             """Calculates loss given network parameters and transitions."""
             _, online_key, target_key = jax.random.split(rng_key, 3)
             dist_q_tm1 = network.apply(online_params, online_key, transitions.s_tm1)
@@ -115,6 +115,9 @@ class EnsC51(parts.Agent):
             repeated_actions = jnp.repeat(transitions.a_tm1, ens_size)
             repeated_discounts = jnp.repeat(transitions.discount_t, ens_size)
 
+            if weights is not None:
+                repeated_weights = jnp.repeat(weights, ens_size)
+
             if transitions.r_t.shape == repeated_actions.shape:
                 repeated_rewards = transitions.r_t
             else:
@@ -130,9 +133,14 @@ class EnsC51(parts.Agent):
                 flattened_logits_target_q_t,
             )
             chex.assert_shape((losses), (self._batch_size * ens_size,))
+            if weights is not None:
+                chex.assert_shape((repeated_weights), (self._batch_size * ens_size,))
 
             mask = jax.lax.stop_gradient(jnp.reshape(transitions.mask_t, (-1,)))
             loss = mask * losses
+
+            if weights is not None:
+                loss = repeated_weights * loss
 
             loss = jnp.sum(loss) / jnp.sum(mask)
 
