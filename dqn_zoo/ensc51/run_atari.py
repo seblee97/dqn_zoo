@@ -43,7 +43,7 @@ from dqn_zoo import networks
 from dqn_zoo import parts
 from dqn_zoo import processors
 from dqn_zoo import replay as replay_lib
-from dqn_zoo.c51 import agent
+from dqn_zoo.ensc51 import agent
 
 # Relevant flag values are expressed in terms of environment frames.
 FLAGS = flags.FLAGS
@@ -62,7 +62,7 @@ flags.DEFINE_float("exploration_epsilon_end_value", 0.01, "")
 flags.DEFINE_float("exploration_epsilon_decay_frame_fraction", 0.02, "")
 flags.DEFINE_float("eval_exploration_epsilon", 0.001, "")
 flags.DEFINE_integer("target_network_update_period", int(4e4), "")
-flags.DEFINE_float("learning_rate", 0.00025, "")
+flags.DEFINE_float("learning_rate", 0.00005, "")
 flags.DEFINE_float("optimizer_epsilon", 0.01 / 32, "")
 flags.DEFINE_float("additional_discount", 0.99, "")
 flags.DEFINE_float("max_abs_reward", 1.0, "")
@@ -223,7 +223,7 @@ def main(argv):
 
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
-    train_agent = agent.C51(
+    train_agent = agent.EnsC51(
         preprocessor=preprocessor_builder(),
         sample_network_input=sample_network_input,
         network=network,
@@ -231,6 +231,7 @@ def main(argv):
         optimizer=optimizer,
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
+        prioritise=FLAGS.prioritise,
         batch_size=FLAGS.batch_size,
         exploration_epsilon=exploration_epsilon_schedule,
         min_replay_capacity_fraction=FLAGS.min_replay_capacity_fraction,
