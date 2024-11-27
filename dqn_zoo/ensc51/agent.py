@@ -194,6 +194,11 @@ class EnsC51(parts.Agent):
 
         self._select_action = jax.jit(select_action)
 
+    def _get_random_mask(self, rng_key):
+        return jax.random.choice(
+            key=rng_key, a=2, shape=(self._ens_size,), p=self._mask_probabilities
+        )
+
     def step(self, timestep: dm_env.TimeStep) -> parts.Action:
         """Selects action given timestep and potentially learns."""
         self._frame_t += 1
