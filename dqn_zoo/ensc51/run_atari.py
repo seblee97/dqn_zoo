@@ -232,6 +232,8 @@ def main(argv):
         transition_accumulator=replay_lib.TransitionAccumulator(),
         replay=replay,
         prioritise=FLAGS.prioritise,
+        mask_probability=FLAGS.mask_probability,
+        ens_size=FLAGS.ens_size,
         batch_size=FLAGS.batch_size,
         exploration_epsilon=exploration_epsilon_schedule,
         min_replay_capacity_fraction=FLAGS.min_replay_capacity_fraction,
