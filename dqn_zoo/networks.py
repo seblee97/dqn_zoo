@@ -441,8 +441,6 @@ def ensc51_atari_network(
         aleatoric_uncertainty = jax.lax.stop_gradient(aleatoric_uncertainty)
         epistemic_uncertainty = jax.lax.stop_gradient(epistemic_uncertainty)
 
-        aleatoric_uncertainty = jnp.var(q_values, axis=1)  # var over distributions
-
         return EnsC51NetworkOutputs(
             q_logits=q_logits,
             q_values=q_values,
