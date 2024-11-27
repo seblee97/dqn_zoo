@@ -163,6 +163,12 @@ class EnsC51(parts.Agent):
 
             td_errors = jnp.mean(losses.reshape((-1, ens_size)), axis=1)
 
+            target_error = (
+                transitions.r_t
+                + jnp.max(dist_target_q_t.q_values, axis=1)
+                - _select_actions(dist_q_tm1.q_values, transitions.a_tm1)
+            ) ** 2
+
             return loss, {
                 "loss": loss,
                 "td_errors": td_errors,
@@ -174,6 +180,7 @@ class EnsC51(parts.Agent):
                 # "q_var_select": q_var_select,
                 "epistemic_select": epistemic_select,
                 "aleatoric_select": aleatoric_select,
+                "target_error": target_error,
             }
 
         def update(
@@ -291,7 +298,9 @@ class EnsC51(parts.Agent):
         if self._prioritise is not None:
             if self._prioritise == "uper":
                 priorities = 0.5 * jnp.log(
-                    1 + aux["mean_epistemic"] / aux["mean_aleatoric"]
+                    1
+                    + (aux["mean_epistemic"] + aux["target_error"])
+                    / aux["mean_aleatoric"]
                 )
             if self._prioritise == "uper_select":
                 priorities = 0.5 * jnp.log(
