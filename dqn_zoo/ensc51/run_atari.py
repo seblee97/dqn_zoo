@@ -24,6 +24,10 @@ import collections
 import itertools
 import sys
 import typing
+import os
+import datetime
+import json
+import time
 
 from absl import app
 from absl import flags
@@ -96,10 +100,10 @@ def main(argv):
         random_state.randint(-sys.maxsize - 1, sys.maxsize + 1, dtype=np.int64)
     )
 
-    if FLAGS.results_csv_path:
-        writer = parts.CsvWriter(FLAGS.results_csv_path)
-    else:
-        writer = parts.NullWriter()
+    # if FLAGS.results_csv_path:
+    #     writer = parts.CsvWriter(FLAGS.results_csv_path)
+    # else:
+    #     writer = parts.NullWriter()
 
     def environment_builder():
         """Creates Atari environment."""
@@ -223,6 +227,19 @@ def main(argv):
 
     train_rng_key, eval_rng_key = jax.random.split(rng_key)
 
+    # create timestamp for logging and checkpoint path
+    if FLAGS.results_path is None:
+        raw_datetime = datetime.datetime.fromtimestamp(time.time())
+        exp_timestamp = raw_datetime.strftime("%Y-%m-%d-%H-%M-%S")
+        exp_path = os.path.join("results", exp_timestamp)
+        os.makedirs(exp_path, exist_ok=True)
+    else:
+        exp_path = FLAGS.results_path
+
+    flag_dict = FLAGS.flag_values_dict()
+    with open(os.path.join(exp_path, "flags.json"), "+w") as json_file:
+        json.dump(flag_dict, json_file, indent=6)
+
     train_agent = agent.EnsC51(
         preprocessor=preprocessor_builder(),
         sample_network_input=sample_network_input,
@@ -248,8 +265,19 @@ def main(argv):
         rng_key=eval_rng_key,
     )
 
+    # setup writer
+    writer = parts.CsvWriter(os.path.join(exp_path, "writer.csv"))
+
     # Set up checkpointing.
-    checkpoint = parts.NullCheckpoint()
+    checkpoint = parts.ImplementedCheckpoint(
+        checkpoint_path=os.path.join(exp_path, "checkpoint.pkl")
+    )
+
+    if checkpoint.can_be_restored():
+        checkpoint.restore()
+        train_agent.set_state(state=checkpoint.state.train_agent)
+        eval_agent.set_state(state=checkpoint.state.eval_agent)
+        writer.set_state(state=checkpoint.state.writer)
 
     state = checkpoint.state
     state.iteration = 0
