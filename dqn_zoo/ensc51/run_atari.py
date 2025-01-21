@@ -266,7 +266,7 @@ def main(argv):
     )
 
     # setup writer
-    writer = parts.CsvWriter(os.path.join(exp_path, "writer.csv"))
+    writer = parts.CsvWriter(os.path.join(exp_path, f"{FLAGS.environment_name}_{FLAGS.prioritise}_writer.csv"))
 
     # Set up checkpointing.
     checkpoint = parts.ImplementedCheckpoint(
